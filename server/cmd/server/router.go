@@ -31,6 +31,7 @@ import (
 	composiointeg "github.com/multica-ai/multica/server/internal/integrations/composio"
 	"github.com/multica-ai/multica/server/internal/integrations/dingtalk"
 	"github.com/multica-ai/multica/server/internal/integrations/lark"
+	"github.com/multica-ai/multica/server/internal/integrations/lweixin"
 	"github.com/multica-ai/multica/server/internal/integrations/slack"
 	"github.com/multica-ai/multica/server/internal/integrations/telegram"
 	"github.com/multica-ai/multica/server/internal/integrations/wecom"
@@ -1201,6 +1202,45 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		slog.Info("telegram integration disabled (MULTICA_TELEGRAM_SECRET_KEY not set)")
 	}
 
+	// Lweixin (external WeChat bridge) integration. Same gating pattern:
+	// MULTICA_LWEIXIN_SECRET_KEY is the at-rest key for each server token;
+	// when unset the handlers return 503 and no Factory is registered.
+	if lwxKey, lwxErr := secretbox.LoadKey("MULTICA_LWEIXIN_SECRET_KEY"); lwxErr == nil {
+		lwxBox, bxErr := secretbox.New(lwxKey)
+		if bxErr != nil {
+			slog.Error("lweixin: secretbox.New failed; lweixin integration disabled", "error", bxErr)
+		} else {
+			lwxBinding := lweixin.NewBindingTokenService(queries, pool)
+			h.LweixinBindingTokens = lwxBinding
+			lwxReplier := lweixin.NewOutboundReplier(lweixin.OutboundReplierConfig{
+				Binding: lwxBinding,
+				Decrypt: lwxBox.Open,
+				// The bind link (/lweixin/bind) is a web-app page: app URL,
+				// not the API URL. Mirrors the Telegram replier.
+				AppURL: appURLFromEnv(),
+				Logger: slog.Default(),
+			})
+			channelRouter.Register(lweixin.TypeLweixin, lweixin.NewLweixinResolverSet(queries, pool, lwxReplier))
+			lwxOutbound := lweixin.NewOutbound(queries, lwxBox.Open, nil, slog.Default())
+			lwxOutbound.Register(bus)
+			h.LweixinOutbound = lwxOutbound
+
+			// Per-installation inbound: the Supervisor builds + supervises one
+			// /api/messages polling loop per active Lweixin installation.
+			lweixin.RegisterLweixin(channelRegistry, lweixin.ChannelDeps{Decrypt: lwxBox.Open})
+
+			lwxInstall, lwxInstErr := lweixin.NewInstallService(queries, pool, lwxBox, slog.Default())
+			if lwxInstErr != nil {
+				slog.Error("lweixin: InstallService init failed; install disabled", "error", lwxInstErr)
+			} else {
+				h.LweixinInstall = lwxInstall
+			}
+			slog.Info("lweixin integration enabled (per-installation polling)")
+		}
+	} else {
+		slog.Info("lweixin integration disabled (MULTICA_LWEIXIN_SECRET_KEY not set)")
+	}
+
 	// Composio integration (MUL-3720). Gated by COMPOSIO_API_KEY plus the
 	// composio_mcp_apps feature flag. The env var is the project-scoped key the
 	// standalone SDK authenticates Composio with (sent as x-api-key; the project
@@ -1829,6 +1869,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Delete("/telegram/installations/{installationId}", h.RevokeTelegramInstallation)
 					r.Post("/telegram/install", h.RegisterTelegramBot)
 				})
+
+				// Lweixin integration. Same admin/member split as Telegram.
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+					r.Get("/lweixin/installations", h.ListLweixinInstallations)
+				})
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
+					r.Delete("/lweixin/installations/{installationId}", h.RevokeLweixinInstallation)
+					r.Post("/lweixin/install", h.RegisterLweixinBot)
+				})
 			})
 		})
 
@@ -1856,6 +1907,9 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		// workspace-scoped, identity from the session, token proves only
 		// "this Telegram user id requested binding".
 		r.Post("/api/telegram/binding/redeem", h.RedeemTelegramBindingToken)
+		// Lweixin binding-token redemption. Same rationale: not
+		// workspace-scoped, identity from the session.
+		r.Post("/api/lweixin/binding/redeem", h.RedeemLweixinBindingToken)
 
 		// Composio integration (MUL-3720). User-scoped (no workspace context):
 		// a connection belongs to a user. These four require a logged-in

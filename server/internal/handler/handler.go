@@ -30,6 +30,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/integrations/dingtalk"
 	"github.com/multica-ai/multica/server/internal/integrations/ghsnapshot"
 	"github.com/multica-ai/multica/server/internal/integrations/lark"
+	"github.com/multica-ai/multica/server/internal/integrations/lweixin"
 	"github.com/multica-ai/multica/server/internal/integrations/slack"
 	"github.com/multica-ai/multica/server/internal/integrations/telegram"
 	"github.com/multica-ai/multica/server/internal/integrations/wecom"
@@ -355,6 +356,16 @@ type Handler struct {
 	// enqueues EventChatDone work.
 	TelegramOutbound *telegram.Outbound
 
+
+	// LweixinInstall owns the LWEIXIN install lifecycle (register a
+	// base_url + token pair / list / revert / revoke) and the at-rest
+	// encryption of each token. Nil unless MULTICA_LWEIXIN_SECRET_KEY is set.
+	LweixinInstall *lweixin.InstallService
+	// LweixinBindingTokens mints/redeems the user-binding tokens behind the
+	// "link your account" prompt. Nil unless Lweixin is configured.
+	LweixinBindingTokens *lweixin.BindingTokenService
+	// LweixinOutbound posts finished agent replies to LWEIXIN on chat:done.
+	LweixinOutbound *lweixin.Outbound
 	// channelFileDelivery names the channel types that can, IN THIS
 	// DEPLOYMENT, carry a file the agent produced the last hop into the
 	// conversation. It answers the claim response's

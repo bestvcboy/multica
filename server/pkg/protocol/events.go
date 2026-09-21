@@ -215,4 +215,9 @@ const (
 	// front-ends invalidate the Telegram installations query on either.
 	EventTelegramInstallationCreated = "telegram_installation:created"
 	EventTelegramInstallationRevoked = "telegram_installation:revoked"
+
+	// Lweixin installation lifecycle. Same contract as the Telegram pair:
+	// listeners invalidate the lweixin installations query on either.
+	EventLweixinInstallationCreated = "lweixin_installation:created"
+	EventLweixinInstallationRevoked = "lweixin_installation:revoked"
 )
