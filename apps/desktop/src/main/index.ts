@@ -4,6 +4,7 @@ import { join } from "path";
 import { pathToFileURL } from "url";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import fixPath from "fix-path";
+import { prepareDesktopAgentEnvironment } from "./agent-path";
 import { setupAutoUpdater } from "./updater";
 import { setupDaemonManager } from "./daemon-manager";
 import { setupLocalDirectory } from "./local-directory";
@@ -99,13 +100,16 @@ const BUNDLED_ICON_PATH = join(__dirname, "../../resources/icon.png").replace(
   "app.asar.unpacked",
 );
 
+// Desktop GUI launches can inherit a stale PATH, so repair the known agent
+// install locations before any child_process.spawn / execFile call in the
+// main process. This is especially important on Windows, where there is no
+// login shell fallback and Codex is commonly installed under per-user paths.
+prepareDesktopAgentEnvironment(process.platform, process.env);
+
 // macOS/Linux GUI launches inherit a minimal PATH from launchd that omits
 // the user's shell config (~/.zshrc, Homebrew, nvm, ~/.local/bin, etc.).
 // Run the user's login shell once to recover the real PATH so the bundled
-// multica CLI can find agent binaries like claude/codex/opencode. Must run
-// before any child_process.spawn / execFile call in the main process —
-// ES module imports are hoisted, so this block executes before createWindow
-// or any daemon-manager spawn.
+// multica CLI can find agent binaries like claude/codex/opencode.
 if (process.platform !== "win32") {
   fixPath();
   // Fallback: ensure common install locations are on PATH when fix-path came

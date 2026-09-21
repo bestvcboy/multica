@@ -829,13 +829,19 @@ func shellArgsFromEnv(name string) ([]string, error) {
 // On Windows this deliberately keeps the stable discovered junction path;
 // resolveAgentEntryWithHeal follows it for each launch so installer upgrades
 // that retarget a still-live junction take effect without a daemon restart.
+// If Windows PATH misses a bare command, the platform fallback also checks
+// the per-user npm and Codex install locations before reporting it missing.
 // When ~/.multica/hooks shadows a real agent binary, skip that hooks directory:
 // previously generated hook wrappers can execute the same command name and
 // recurse forever if the daemon records or launches the wrapper.
 func resolveAgentExecutablePath(cmd string) (string, error) {
 	resolved, err := exec.LookPath(cmd)
 	if err != nil {
-		return "", err
+		if fallback, ok := resolveAgentExecutablePathFallback(cmd); ok {
+			resolved = fallback
+		} else {
+			return "", err
+		}
 	}
 	if strings.ContainsAny(cmd, "/\\") {
 		return canonicalConfiguredExecutablePath(resolved), nil
