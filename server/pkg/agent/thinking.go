@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"regexp"
@@ -245,11 +246,11 @@ func projectClaudeLevels(superset []string, allow map[string]bool) []ThinkingLev
 
 // ── Codex ────────────────────────────────────────────────────────────
 //
-// `codex debug models --bundled` is the structured discovery hook for the
-// visible model catalog, each model's reasoning catalog, and service tiers. OpenAI added
-// the command and `--bundled` flag together in Codex 0.122.0 (openai/codex
-// #18625). Older versions, failed invocations, and malformed/empty payloads
-// use codexStaticModels so the picker remains usable.
+// `codex debug models` is the structured discovery hook for the visible
+// model catalog, each model's reasoning catalog, and service tiers. OpenAI added
+// the command in Codex 0.122.0 (openai/codex #18625). Older versions, failed
+// invocations, and malformed/empty payloads use codexStaticModels so the
+// picker remains usable.
 //
 // We prefer this over the older config-error probe trick because:
 //   1. It gives us per-model subsets without hand-maintained tables.
@@ -258,12 +259,13 @@ func projectClaudeLevels(superset []string, allow map[string]bool) []ThinkingLev
 //
 // The subcommand emits JSON on stdout by default — there is no
 // `--output json` flag (a prior version of this code passed one and
-// silently failed on 0.131.0). We add `--bundled` to skip the network
-// refresh: discovery runs on every daemon poll and a network hop here
-// would block the picker behind whatever the user's connection allows.
-// The bundled catalog is what determines which `model_reasoning_effort`
-// tokens the local binary actually accepts, which is the only thing we
-// need for validation.
+// silently failed on 0.131.0). We run the plain form first because it
+// merges the bundled catalog with providers configured in config.toml
+// (custom base_url entries), which is the only way third-party gateways
+// show up in the picker. The `--bundled` variant is the fallback for
+// when that refresh cannot complete (offline, blocked network): it skips
+// the network hop and still determines which `model_reasoning_effort`
+// tokens the local binary accepts.
 //
 // The static fallback deliberately mirrors a recently verified bundled
 // model/thinking catalog. It does not guess service-tier availability.
@@ -374,16 +376,31 @@ func annotateCodexExplicitStandardServiceTier(models []Model, supported bool) []
 	return models
 }
 
-// codexDebugModelsArgs is the argv we pass to discover the local Codex
-// catalog. Kept as a package-level var (not a literal at the call site)
+// codexDebugModelsArgs / codexDebugBundledModelsArgs are the argv
+// candidates for catalog discovery: the full catalog first (includes
+// config.toml providers), the bundled-only catalog as the offline
+// fallback. Kept as package-level vars (not literals at the call site)
 // so tests can assert the exact form a real `codex` invocation receives,
-// not just the parser behavior on a fixture string. The argv shape is
-// the contract that broke under PR1 review; the test that pins it sits
-// in thinking_test.go.
-var codexDebugModelsArgs = []string{"debug", "models", "--bundled"}
+// not just the parser behavior on a fixture string.
+var (
+	codexDebugModelsArgs        = []string{"debug", "models"}
+	codexDebugBundledModelsArgs = []string{"debug", "models", "--bundled"}
+)
 
+// runCodexDebugModels returns the richest catalog the local binary will
+// admit: full `debug models` when it produces output, else the bundled
+// variant, so a failed provider refresh degrades to built-in models
+// instead of an empty picker.
 func runCodexDebugModels(ctx context.Context, runtimeCmd Command) ([]byte, error) {
-	cmd := runtimeCmd.exec(ctx, codexDebugModelsArgs...)
+	raw, err := runCodexDebugArgs(ctx, runtimeCmd, codexDebugModelsArgs)
+	if err == nil && len(bytes.TrimSpace(raw)) > 0 {
+		return raw, nil
+	}
+	return runCodexDebugArgs(ctx, runtimeCmd, codexDebugBundledModelsArgs)
+}
+
+func runCodexDebugArgs(ctx context.Context, runtimeCmd Command, args []string) ([]byte, error) {
+	cmd := runtimeCmd.exec(ctx, args...)
 	hideAgentWindow(cmd)
 	return outputOwned(cmd, runtimeCmd.logger)
 }

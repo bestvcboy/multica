@@ -176,7 +176,7 @@ func TestRunCodexDebugModels_ArgvSeenByBinary(t *testing.T) {
 		t.Fatalf("read argv file: %v", err)
 	}
 	got := splitNonEmptyLines(string(data))
-	want := []string{"debug", "models", "--bundled"}
+	want := []string{"debug", "models"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fake codex received argv %v, want %v", got, want)
 	}
@@ -343,7 +343,7 @@ func TestDiscoverCodexModelsVersionGateAndFallback(t *testing.T) {
 		t.Skip("shell-script fake binary requires a POSIX shell")
 	}
 
-	t.Run("supported version uses bundled catalog", func(t *testing.T) {
+	t.Run("supported version uses runtime catalog", func(t *testing.T) {
 		dir := t.TempDir()
 		fake := filepath.Join(dir, "codex")
 		script := `#!/bin/sh
@@ -362,6 +362,28 @@ echo '{"models":[{"slug":"runtime-model","display_name":"Runtime Model","visibil
 		}
 		if got[0].SupportsExplicitStandardServiceTier {
 			t.Fatalf("Codex 0.122.0 must not advertise explicit-standard support: %+v", got[0])
+		}
+	})
+
+	t.Run("full catalog failure falls back to bundled catalog", func(t *testing.T) {
+		dir := t.TempDir()
+		fake := filepath.Join(dir, "codex")
+		script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "codex-cli 0.144.1"
+  exit 0
+fi
+if [ "$3" = "--bundled" ]; then
+  echo '{"models":[{"slug":"bundled-model","display_name":"Bundled","visibility":"list","supported_reasoning_levels":[{"effort":"high"}]}]}'
+  exit 0
+fi
+exit 1
+`
+		writeTestExecutable(t, fake, []byte(script))
+
+		got := discoverCodexModels(context.Background(), Command{Path: fake})
+		if len(got) != 1 || got[0].ID != "bundled-model" {
+			t.Fatalf("expected bundled fallback catalog, got %+v", got)
 		}
 	})
 
