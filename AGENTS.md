@@ -125,3 +125,16 @@ Workspace-scoped queries filter by `workspace_id`; membership gates access and `
 - Do not add internal compatibility shims, dual writes, fallback paths, or legacy adapters unless requested. This does not relax API response compatibility above.
 - New global pre-workspace routes use a single word or `/{noun}/{verb}`, not hyphenated root names. Update `server/internal/handler/reserved_slugs.json`, run `pnpm generate:reserved-slugs`, and commit `packages/core/paths/reserved-slugs.ts` when changing reserved slugs.
 - Use atomic conventional commits and the repository PR template. For releases, follow [.github/RELEASING.md](.github/RELEASING.md); default to a patch bump unless specified otherwise.
+
+## Fork Maintenance (bestvcboy/multica)
+
+This checkout tracks two remotes: `upstream` = multica-ai/multica (the original project) and `origin` = bestvcboy/multica (this fork). Work happens on the `vc/main` branch; `main` mirrors upstream and stays pristine.
+
+- Never push to `upstream` or open PRs against it unless asked; do not treat merged upstream state as achievable from this account (read-only membership).
+- Sync on demand, not on a schedule: `git fetch upstream && git merge upstream/main && git push origin vc/main`.
+- Every local change must stay decoupled so merges from upstream stay trivial:
+  - New features live in self-contained packages/directories (pattern: `server/internal/integrations/lweixin/`) plus a minimal wiring seam in shared files.
+  - Seams in upstream files are additive only (register a route, construct a dependency, add a constant). Never rework upstream logic in place.
+  - Keep the count of touched shared files and hunks as small as possible; prefer one seam over several.
+- After any merge from upstream, re-verify the seams still apply (`go build ./...` in `server` plus the narrowest tests for each seam) before pushing.
+- Windows migration-number collisions with upstream are resolved by renumbering the fork-side migration to the next free number (precedent: lweixin 533 -> 535); never edit upstream migrations.
