@@ -568,10 +568,10 @@ describe("IntegrationsTab", () => {
     expect(screen.queryByTestId("slack-bind-button")).toBeNull();
     expect(screen.queryByTestId("wecom-bind-button")).toBeNull();
     expect(screen.queryByTestId("telegram-bind-button")).toBeNull();
-    // The Slack, WeCom and Telegram sections fall back to the shared members note.
+    // Admin-only channels, including LWeixin, show the shared members note.
     expect(
       screen.getAllByText(/Only workspace owners and admins can manage this connection/i),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 
   it("renders the bind entry (not coming-soon) when installs are unavailable but the agent is already bound", () => {

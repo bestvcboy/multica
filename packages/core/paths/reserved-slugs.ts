@@ -100,6 +100,7 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   "graphql",
   "webhooks",
   "sdk",
+  "lweixin",
   "tokens",
   "cli",
 

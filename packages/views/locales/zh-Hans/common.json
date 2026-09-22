@@ -128,5 +128,20 @@
   },
   "navigation": {
     "open_in_new_tab": "在新标签页打开"
+  },
+  "lweixin_bind": {
+    "page_title": "绑定你的 Multica 账号",
+    "redeeming": "正在绑定…",
+    "needs_auth_description": "请先登录 Multica 以完成绑定。链接中的令牌会把该微信号绑定到当前 Multica 用户,因此必须先登录。",
+    "sign_in": "登录",
+    "done_title": "已绑定。",
+    "done_description": "你之后发给该微信号的消息将直达 agent,现在可以关闭本页。",
+    "error_title": "绑定未完成",
+    "error_admin_hint": "如果反复失败,请向该微信号重新发送消息获取新的绑定链接。",
+    "error_missing_token": "链接缺少令牌。请通过对应的微信会话重新获取。",
+    "error_expired": "链接无效或已过期(15 分钟)。请重新获取绑定链接。",
+    "error_already_bound": "该微信号已绑定到其他 Multica 用户。换绑需要先在原用户上解绑。",
+    "error_not_member": "当前登录的 Multica 账号不是该工作区成员。",
+    "error_unknown": "出错了,请重试;若持续失败,请联系工作区管理员。"
   }
 }

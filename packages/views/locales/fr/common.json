@@ -128,5 +128,20 @@
   },
   "navigation": {
     "open_in_new_tab": "Ouvrir dans un nouvel onglet"
+  },
+  "lweixin_bind": {
+    "page_title": "Lier votre compte Multica",
+    "redeeming": "Liaison en cours…",
+    "needs_auth_description": "Connectez-vous à Multica pour terminer la liaison. Le jeton du lien associe ce compte WeChat à l'utilisateur Multica connecté : la connexion est requise au préalable.",
+    "sign_in": "Se connecter",
+    "done_title": "C'est lié.",
+    "done_description": "Votre prochain message à ce compte WeChat ira directement à l'agent. Vous pouvez fermer cet onglet.",
+    "error_title": "Impossible de terminer la liaison",
+    "error_admin_hint": "Si le problème persiste, renvoyez un message au compte WeChat pour obtenir un nouveau lien.",
+    "error_missing_token": "Le lien n'a pas de jeton. Renvoyez un message via WeChat pour en obtenir un.",
+    "error_expired": "Ce lien est invalide ou expiré (15 minutes). Obtenez-en un nouveau depuis WeChat.",
+    "error_already_bound": "Ce compte WeChat est déjà lié à un autre utilisateur Multica. Un transfert exige d'abord une déliaison explicite.",
+    "error_not_member": "Le compte Multica connecté n'est pas membre de cet espace de travail.",
+    "error_unknown": "Une erreur est survenue. Réessayez, puis contactez l'administrateur si le problème persiste."
   }
 }

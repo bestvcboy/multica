@@ -67,6 +67,7 @@ vi.mock("./wecom-tab", () => ({ WecomTab: () => <div>WeCom detail</div> }));
 vi.mock("./telegram-tab", () => ({
   TelegramTab: () => <div>Telegram detail</div>,
 }));
+vi.mock("./lweixin-tab", () => ({ LweixinTab: () => <div>LWeixin detail</div> }));
 
 import { IntegrationsTab } from "./integrations-tab";
 
@@ -85,6 +86,11 @@ beforeEach(() => {
 });
 
 describe("Integration directory", () => {
+  it("opens the LWeixin connection settings", () => {
+    state.search = "tab=integrations&integration=lweixin";
+    renderWithI18n(<IntegrationsTab />);
+    expect(screen.getByText("LWeixin detail")).toBeInTheDocument();
+  });
   it("shows live connection summaries without mounting configuration forms", () => {
     renderWithI18n(<IntegrationsTab />);
     expect(

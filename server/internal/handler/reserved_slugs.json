@@ -92,6 +92,7 @@
         "graphql",
         "webhooks",
         "sdk",
+        "lweixin",
         "tokens",
         "cli"
       ]

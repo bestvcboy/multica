@@ -121,6 +121,21 @@
     "error_not_member": "You're signed in to a Multica account that isn't a member of this workspace.",
     "error_unknown": "Something went wrong. Try again, and if the problem persists, contact the workspace admin."
   },
+  "lweixin_bind": {
+    "page_title": "Link your Multica account",
+    "redeeming": "Linking your account…",
+    "needs_auth_description": "Sign in to Multica to complete the link. The token in the link binds your WeChat identity to this Multica user, so you must be logged in first.",
+    "sign_in": "Sign in",
+    "done_title": "You're linked.",
+    "done_description": "Your next message to the WeChat account will go straight to the agent. You can close this tab.",
+    "error_title": "Couldn't complete the link",
+    "error_admin_hint": "If this keeps happening, message the WeChat account again to get a fresh link.",
+    "error_missing_token": "The link is missing its token. Message the WeChat account again to get a new one.",
+    "error_expired": "This link is invalid or expired (links are valid for 15 minutes). Get a new link from the WeChat account.",
+    "error_already_bound": "This WeChat identity is already linked to a different Multica user. Account transfers must go through an explicit unbind first.",
+    "error_not_member": "You're signed in to a Multica account that isn't a member of this workspace.",
+    "error_unknown": "Something went wrong. Try again, and if the problem persists, contact the workspace admin."
+  },
   "not_found": {
     "title": "Page not found",
     "description": "The page you are looking for doesn't exist or has been moved.",

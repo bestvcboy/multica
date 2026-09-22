@@ -44,6 +44,9 @@ import type {
   TelegramInstallation,
   ListTelegramInstallationsResponse,
   RedeemTelegramBindingTokenResponse,
+  LweixinInstallation,
+  ListLweixinInstallationsResponse,
+  RedeemLweixinBindingTokenResponse,
   GroupedIssuesResponse,
   GitHubConnectResponse,
   GitHubPullRequest,
@@ -3274,6 +3277,55 @@ export const EMPTY_REDEEM_TELEGRAM_BINDING_TOKEN_RESPONSE: RedeemTelegramBinding
   workspace_id: "",
   installation_id: "",
   telegram_user_id: "",
+};
+
+export const LweixinInstallationSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string().default(""),
+  agent_id: z.string().default(""),
+  app_id: z.string().default(""),
+  base_url: z.string().default(""),
+  installer_user_id: z.string().default(""),
+  status: z.string().default("revoked"),
+  installed_at: z.string().default(""),
+  created_at: z.string().default(""),
+  updated_at: z.string().default(""),
+}).loose();
+
+export const EMPTY_LWEIXIN_INSTALLATION: LweixinInstallation = {
+  id: "",
+  workspace_id: "",
+  agent_id: "",
+  app_id: "",
+  base_url: "",
+  installer_user_id: "",
+  status: "revoked",
+  installed_at: "",
+  created_at: "",
+  updated_at: "",
+};
+
+export const ListLweixinInstallationsResponseSchema = z.object({
+  installations: z.array(LweixinInstallationSchema).default([]),
+  configured: z.boolean().default(false),
+  install_supported: z.boolean().optional(),
+}).loose();
+
+export const EMPTY_LIST_LWEIXIN_INSTALLATIONS_RESPONSE: ListLweixinInstallationsResponse = {
+  installations: [],
+  configured: false,
+};
+
+export const RedeemLweixinBindingTokenResponseSchema = z.object({
+  workspace_id: z.string().default(""),
+  installation_id: z.string().default(""),
+  lweixin_user_id: z.string().default(""),
+}).loose();
+
+export const EMPTY_REDEEM_LWEIXIN_BINDING_TOKEN_RESPONSE: RedeemLweixinBindingTokenResponse = {
+  workspace_id: "",
+  installation_id: "",
+  lweixin_user_id: "",
 };
 
 // Skills. Introduced for `POST /api/skills/:id/refresh` (update a skill from

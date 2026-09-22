@@ -582,6 +582,52 @@ describe("ApiClient schema fallback", () => {
     });
   });
 
+  describe("LWeixin integration", () => {
+    it("falls back to a safe empty installation list when the response is malformed", async () => {
+      stubFetchJson({ installations: "not-an-array", configured: true });
+      const client = new ApiClient("https://api.example.test");
+      await expect(client.listLweixinInstallations("ws-1")).resolves.toEqual({
+        installations: [],
+        configured: false,
+      });
+    });
+
+    it("defaults fields omitted by an older server", async () => {
+      stubFetchJson({
+        installations: [{ id: "lw-1", status: "active" }],
+        configured: true,
+      });
+      const client = new ApiClient("https://api.example.test");
+      const res = await client.listLweixinInstallations("ws-1");
+      expect(res.installations[0]).toMatchObject({
+        id: "lw-1",
+        workspace_id: "",
+        agent_id: "",
+        app_id: "",
+        base_url: "",
+      });
+      expect(res.install_supported).toBeUndefined();
+    });
+
+    it("falls back safely when register and redeem responses are malformed", async () => {
+      stubFetchJson({ id: 123 });
+      const client = new ApiClient("https://api.example.test");
+      await expect(
+        client.registerLweixinBot("ws-1", "agent-1", {
+          base_url: "https://wchat.example.test",
+          api_token: "tok",
+        }),
+      ).resolves.toMatchObject({ id: "", status: "revoked" });
+
+      stubFetchJson({ workspace_id: 123 });
+      await expect(client.redeemLweixinBindingToken("bind-token")).resolves.toEqual({
+        workspace_id: "",
+        installation_id: "",
+        lweixin_user_id: "",
+      });
+    });
+  });
+
   describe("listDingTalkGroups", () => {
     it("preserves bot activity metadata for each group relationship", async () => {
       stubFetchJson({
