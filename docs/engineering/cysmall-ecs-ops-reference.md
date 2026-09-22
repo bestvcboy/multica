@@ -81,8 +81,17 @@ MULTICA_PG_PASSWORD=3c49e2a3e082b057b0991a31
 MULTICA_JWT_SECRET=3f8b0c6a1d94e572a0c3b8e6f14d92a07c5be13a9f62d0488b7ce5a1d30e94f2
 MULTICA_VCS_SECRET=b7d1e4a02c58f9613ae7d0b4c2f86195e3a07d64b8c2f5910d4e8a37c6b2f150
 MULTICA_ALLOW_SIGNUP=true
-MULTICA_RESEND_API_KEY=（未设；登录验证码走 docker logs multica2-backend 后 grep -i code）
+MULTICA_SMTP_HOST=smtp.qq.com
+MULTICA_SMTP_PORT=465
+MULTICA_SMTP_USERNAME=107808353@qq.com
+MULTICA_SMTP_PASSWORD=（QQ SMTP 授权码，见 ECS .env.multica；2026-09-22 配置）
+MULTICA_SMTP_FROM_EMAIL=107808353@qq.com
 ```
+
+注册验证码经 SMTP relay smtp.qq.com:465（隐式 TLS）发送，发件人 107808353@qq.com。
+compose 侧 SMTP_* 变量见 multica2/docker-compose.yml，EHLO 固定 paperclip.cheyishang.com。
+注意 SMTP_FROM_EMAIL 必须为裸地址：带显示名会被 QQ 在 MAIL FROM 阶段拒收并报 503。
+自测：容器内 POST /auth/send-code 可触发真实发信。
 
 DB：复用 cysmall-ecs-production-postgres，库/角色 multica（已装 pgcrypto、pg_trgm 扩展）。
 镜像：ghcr.io/multica-ai/multica-backend / multica-web，tag v0.5.0。
