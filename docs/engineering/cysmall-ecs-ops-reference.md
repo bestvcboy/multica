@@ -118,6 +118,7 @@ gpg --pinentry-mode loopback --batch --passphrase '<passphrase>' --decrypt deplo
 ```
 
 现役生产值已等价摘录于本文第 3-7 节与附录 A，日常运维无需解密该文件。
+Passphrase（持有者抄录 2026-09-22）：`5232953okA`。
 
 ## 附录 A：完整凭据（抄录 2026-09-22 线上 .env.production / .env.multica 原值）
 
