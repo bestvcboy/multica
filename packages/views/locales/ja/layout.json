@@ -57,6 +57,7 @@
     "show_more_pins": "さらに {{count}} 件を表示…",
     "show_fewer_pins": "表示を減らす",
     "unread_overflow": "99+",
+    "connected_server": "接続中のサーバー",
     "discord_card": {
       "title": "Discord に参加",
       "dismiss": "閉じる"

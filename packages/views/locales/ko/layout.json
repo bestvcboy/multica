@@ -57,6 +57,7 @@
     "show_more_pins": "{{count}}개 더 보기…",
     "show_fewer_pins": "접기",
     "unread_overflow": "99+",
+    "connected_server": "연결된 서버",
     "discord_card": {
       "title": "Discord 참여하기",
       "dismiss": "닫기"

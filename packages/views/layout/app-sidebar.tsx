@@ -34,6 +34,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@multica/ui
 import { CappedNumberFlow } from "@multica/ui/components/ui/number-flow";
 import { StatusIcon } from "../issues/components/status-icon";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
+import { workspaceUrlHost } from "@multica/core/workspace/workspace-url";
 import { openCreateIssueWithPreference } from "@multica/core/issues/stores/create-mode-store";
 import {
   Sidebar,
@@ -443,6 +444,14 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
   const { data: workspaces = EMPTY_WORKSPACES } = useQuery(workspaceListOptions());
   const { data: myInvitations = EMPTY_INVITATIONS } = useQuery(myInvitationListOptions());
   const workspaceCreationDisabled = useConfigStore((s) => s.workspaceCreationDisabled);
+  // Desktop: the server URL recorded at login bootstrap. Web: the origin
+  // this app is served from -- the truth for which server is in use.
+  const daemonServerUrl = useConfigStore((s) => s.daemonServerUrl);
+  const serverHost = daemonServerUrl
+    ? workspaceUrlHost(daemonServerUrl)
+    : typeof window === "undefined"
+      ? ""
+      : window.location.host;
 
   // On a phone the sidebar is a Sheet covering the page, so navigating out of
   // it has to dismiss it — otherwise the destination renders underneath and the
@@ -909,6 +918,14 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
         </SidebarContent>
 
         <SidebarFooter className="p-2">
+          {/* Always-visible connected-server host; written at login bootstrap. */}
+          <div
+            className="flex items-center gap-1.5 px-2 pb-1 text-caption text-muted-foreground group-data-[collapsible=icon]:hidden"
+            title={t(($) => $.sidebar.connected_server)}
+          >
+            <span aria-hidden>&#128421;</span>
+            <span className="truncate">{serverHost}</span>
+          </div>
           <SidebarMenu className="gap-0.5">
             {utilityNav.map((item) => {
               const href = p[item.key]();

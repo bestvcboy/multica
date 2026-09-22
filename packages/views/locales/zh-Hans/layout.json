@@ -57,6 +57,7 @@
     "show_more_pins": "再显示 {{count}} 项...",
     "show_fewer_pins": "收起",
     "unread_overflow": "99+",
+    "connected_server": "已连接服务器",
     "discord_card": {
       "title": "加入 Discord",
       "dismiss": "关闭"

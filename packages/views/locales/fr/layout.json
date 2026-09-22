@@ -57,6 +57,7 @@
     "show_more_pins": "Afficher {{count}} de plus…",
     "show_fewer_pins": "Afficher moins",
     "unread_overflow": "99+",
+    "connected_server": "Serveur connecté",
     "discord_card": {
       "title": "Rejoignez notre Discord",
       "dismiss": "Ignorer"
