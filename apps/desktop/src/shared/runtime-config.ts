@@ -1,3 +1,5 @@
+import { FORK_RUNTIME_DEFAULTS } from "./fork-runtime-config";
+
 export interface RuntimeConfig {
   schemaVersion: 1;
   apiUrl: string;
@@ -18,6 +20,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = Object.freeze({
   apiUrl: "https://api.multica.ai",
   wsUrl: "wss://api.multica.ai/ws",
   appUrl: "https://multica.ai",
+  ...FORK_RUNTIME_DEFAULTS,
 });
 
 const LOCAL_DEV_RUNTIME_CONFIG: RuntimeConfig = Object.freeze({
