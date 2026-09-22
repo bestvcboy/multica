@@ -5,6 +5,11 @@ RUN apk add --no-cache git
 
 WORKDIR /src
 
+# Proxy for module downloads; CN-hosted builders override it with
+# --build-arg GOPROXY=... (proxy.golang.org is unreachable from there).
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
 # Cache dependencies
 COPY server/go.mod server/go.sum ./server/
 RUN cd server && go mod download
