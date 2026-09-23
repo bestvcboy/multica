@@ -18,3 +18,18 @@ LWEIXIN 消息轮询与回复由 ECS 上的 Multica 后端运行；智能体运�
 绑定链接过期时，回到微信重新发送消息获取新链接。
 
 本扩展属于 bestvcboy/multica fork。后端隔离在 `server/internal/integrations/lweixin/`，共享前端通过独立模块和少量入口接线集成；同步上游后仍需验证这些入口。
+
+## Fork 接线清单
+
+扩展实现归属 `server/internal/integrations/lweixin/`、`server/internal/handler/lweixin.go`、`packages/core/lweixin/`、`packages/views/settings/components/lweixin-tab.tsx` 和 `packages/views/lweixin/`。共享代码只接入这些模块，不修改其他渠道的处理逻辑。
+
+| 接入点 | 上游同步后重验 |
+| --- | --- |
+| `server/cmd/server/router.go`、`server/internal/handler/handler.go` | 密钥配置、channel resolver/factory、出站订阅、成员可读与管理员可写的安装路由、登录后绑定路由仍接线。 |
+| `server/pkg/protocol/events.go`、`packages/core/realtime/use-realtime-sync.ts` | 创建和撤销事件仍使工作区安装列表失效。 |
+| `server/migrations/535_issue_origin_lweixin_chat.up.sql` | 上游迁移编号和 `issue.origin_type` 约束不冲突。 |
+| `packages/core/api/client.ts`、`packages/core/api/schemas.ts`、`packages/core/types/lweixin.ts` | 列表、连接、断开、绑定仍按兼容 schema 解析；安装状态及可用标记保留。 |
+| `packages/views/agents/components/agent-overview-pane.tsx`、`packages/views/agents/components/tabs/integrations-tab.tsx` | 仅 LWEIXIN 启用时 Web/桌面共用的智能体导航显示集成入口，管理员能连接，已有连接仍可查看或断开。 |
+| `packages/views/settings/components/integrations-tab.tsx`、`apps/web/app/lweixin/bind/page.tsx` | 设置入口和连接状态仍可达；浏览器绑定链接仍落到绑定页。 |
+
+回归检查：`pnpm --filter @multica/views exec vitest run agents/components/agent-overview-pane.test.tsx settings/components/integrations-tab.test.tsx settings/components/lweixin-tab.test.tsx`，以及同步后的 `go build ./...`（在 `server/`）。
