@@ -318,6 +318,7 @@ function LweixinConversations({ wsId, installationId }: { wsId: string; installa
             type="button"
             className={cn("block w-full min-w-0 border-b px-2 py-2 text-left text-body hover:bg-muted", selected === conversation.id && "bg-muted font-medium")}
             aria-pressed={selected === conversation.id}
+            title={conversation.chatId}
             onClick={() => { setSelected(conversation.id); setMessageOffset(0); }}
           >
             <span className="block truncate">{conversation.chatId}</span>

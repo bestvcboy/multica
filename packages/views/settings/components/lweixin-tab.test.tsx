@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   register: vi.fn(), invalidate: vi.fn(), error: vi.fn(), role: "owner",
   queried: [] as string[], installations: [] as unknown[],
   conversations: [] as unknown[],
-  updateDefault: vi.fn(), updateRoute: vi.fn(),
+  updateDefault: vi.fn(), updateGroupDefault: vi.fn(), updateRoute: vi.fn(),
 }));
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: <T,>(options: T) => options,
@@ -44,7 +44,7 @@ vi.mock("@multica/core/auth", () => {
 vi.mock("@multica/core/api", () => ({ api: {
   registerLweixinBot: mocks.register,
   updateLweixinRouting: mocks.updateDefault,
-  updateLweixinGroupRouting: mocks.updateDefault,
+  updateLweixinGroupRouting: mocks.updateGroupDefault,
   updateLweixinConversationRoute: mocks.updateRoute,
 } }));
 vi.mock("@multica/core/workspace/hooks", () => ({ useActorName: () => ({ getAgentName: () => "Agent" }) }));
@@ -139,7 +139,7 @@ describe("LweixinTab history", () => {
       id: "g-1", chatId: "room-1", chatType: "group", routeMode: "inherit",
       routeAgentId: null, routeRevision: 0, triggerMode: "mention", triggerReason: "mention_metadata_unavailable",
     }];
-    mocks.updateDefault.mockResolvedValue({});
+    mocks.updateGroupDefault.mockResolvedValue({});
     mocks.updateRoute.mockResolvedValue({});
     renderTab();
     await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
@@ -147,7 +147,8 @@ describe("LweixinTab history", () => {
     await userEvent.selectOptions(screen.getAllByLabelText("Routing")[1]!, "agent");
     await userEvent.selectOptions(screen.getByLabelText("Agent"), "agent-2");
     await userEvent.click(screen.getAllByRole("button", { name: "Save" })[1]!);
-    await waitFor(() => expect(mocks.updateDefault).toHaveBeenCalledWith("workspace-1", "inst-1", { mode: "agent", agentId: "agent-2" }));
+    await waitFor(() => expect(mocks.updateGroupDefault).toHaveBeenCalledWith("workspace-1", "inst-1", { mode: "agent", agentId: "agent-2" }));
+    expect(mocks.updateDefault).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByText("room-1"));
     expect(screen.getByText("The gateway does not provide a verified mention target. Mention-only messages are recorded without a reply.")).toBeTruthy();
@@ -155,6 +156,18 @@ describe("LweixinTab history", () => {
     expect(screen.getByText("Every new text message in this group will be eligible for a run once isolated execution is enabled.")).toBeTruthy();
     await userEvent.click(screen.getAllByRole("button", { name: "Save" })[2]!);
     await waitFor(() => expect(mocks.updateRoute).toHaveBeenCalledWith("workspace-1", "inst-1", "g-1", "inherit", null, "all"));
+  });
+
+  it("keeps a long group ID accessible when its row is visually truncated", async () => {
+    const chatId = "room-" + "A".repeat(160);
+    mocks.conversations = [{
+      id: "g-2", chatId, chatType: "group", routeMode: "inherit",
+      routeAgentId: null, routeRevision: 0, triggerMode: "mention",
+      triggerReason: "mention_metadata_unavailable",
+    }];
+    renderTab();
+    await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
+    expect(screen.getByRole("button", { name: new RegExp(chatId) }).getAttribute("title")).toBe(chatId);
   });
 
   it("pages conversations without retaining the previous selection", async () => {
