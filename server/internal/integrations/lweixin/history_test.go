@@ -198,6 +198,10 @@ func TestSilentHistoryScopesAndDeduplicates(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE channel_installation SET status = 'active' WHERE id = $1`, inst); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `INSERT INTO lweixin_routing_policy (workspace_id, installation_id, account_id)
+		VALUES ($1, $2, 'replacement')`, ws, inst); err != nil {
+		t.Fatal(err)
+	}
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -236,5 +240,8 @@ func TestSilentHistoryScopesAndDeduplicates(t *testing.T) {
 	var remaining int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM lweixin_conversation WHERE workspace_id = $1`, ws).Scan(&remaining); err != nil || remaining != 0 {
 		t.Fatalf("workspace history remained: %d %v", remaining, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM lweixin_routing_policy WHERE workspace_id = $1`, ws).Scan(&remaining); err != nil || remaining != 0 {
+		t.Fatalf("workspace routing remained: %d %v", remaining, err)
 	}
 }

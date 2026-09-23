@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -90,6 +91,87 @@ func (h *Handler) ListLweixinMessages(w http.ResponseWriter, r *http.Request) {
 	} else {
 		writeJSON(w, http.StatusOK, map[string]any{"messages": rows})
 	}
+}
+
+func lweixinRouteError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, lweixin.ErrHistoryNotFound):
+		writeError(w, http.StatusNotFound, "lweixin installation or conversation not found")
+	case errors.Is(err, lweixin.ErrRoutingLegacy), errors.Is(err, lweixin.ErrRouteAgentUnavailable):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, lweixin.ErrRouteInvalid):
+		writeError(w, http.StatusBadRequest, "invalid lweixin route")
+	default:
+		writeError(w, http.StatusInternalServerError, "failed to update lweixin route")
+	}
+}
+
+func (h *Handler) GetLweixinRouting(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	policy, err := h.LweixinHistory.GetRouting(r.Context(), ws, inst)
+	if err != nil {
+		lweixinRouteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, policy)
+}
+
+func (h *Handler) PatchLweixinRouting(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		PrivateDefault *lweixin.RouteChoice `json:"private_default"`
+		GroupDefault   *lweixin.RouteChoice `json:"group_default"`
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid routing policy")
+		return
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid routing policy")
+		return
+	}
+	policy, err := h.LweixinHistory.PatchRouting(r.Context(), ws, inst, body.PrivateDefault, body.GroupDefault)
+	if err != nil {
+		lweixinRouteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, policy)
+}
+
+func (h *Handler) PatchLweixinConversationRoute(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	conv, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "conversationId"), "conversation id")
+	if !ok {
+		return
+	}
+	var choice lweixin.RouteChoice
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&choice); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation route")
+		return
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid conversation route")
+		return
+	}
+	result, err := h.LweixinHistory.PatchConversationRoute(r.Context(), ws, inst, conv, choice)
+	if err != nil {
+		lweixinRouteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // LweixinInstallationResponse is the wire shape for a LWEIXIN installation

@@ -115,6 +115,9 @@ func (h *History) SilentHandler(id pgtype.UUID) channel.InboundHandler {
 // DeleteWorkspaceHistory runs inside the workspace deletion transaction,
 // after its FOR UPDATE lock has stopped new inbound history writes.
 func DeleteWorkspaceHistory(ctx context.Context, tx pgx.Tx, wsID pgtype.UUID) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM lweixin_routing_policy WHERE workspace_id = $1`, wsID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM lweixin_text_message WHERE conversation_id IN
 		(SELECT id FROM lweixin_conversation WHERE workspace_id = $1)`, wsID); err != nil {
 		return err
@@ -123,7 +126,7 @@ func DeleteWorkspaceHistory(ctx context.Context, tx pgx.Tx, wsID pgtype.UUID) er
 	return err
 }
 
-func (h *History) ListConversations(ctx context.Context, wsID, instID pgtype.UUID, limit, offset int) ([]Conversation, error) {
+func (h *History) ListConversations(ctx context.Context, wsID, instID pgtype.UUID, limit, offset int) ([]ConversationRoute, error) {
 	var exists bool
 	err := h.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM channel_installation
 		WHERE id = $1 AND workspace_id = $2 AND channel_type = 'lweixin')`, instID, wsID).Scan(&exists)
@@ -133,19 +136,32 @@ func (h *History) ListConversations(ctx context.Context, wsID, instID pgtype.UUI
 	if !exists {
 		return nil, ErrHistoryNotFound
 	}
-	rows, err := h.pool.Query(ctx, `SELECT id::text, account_id, chat_type, chat_id, last_message_at
-		FROM lweixin_conversation WHERE workspace_id = $1 AND installation_id = $2
-		ORDER BY last_message_at DESC, id DESC LIMIT $3 OFFSET $4`, wsID, instID, limit, offset)
+	rows, err := h.pool.Query(ctx, `SELECT c.id::text, c.account_id, c.chat_type, c.chat_id, c.last_message_at,
+		c.route_mode, c.route_agent_id,
+		CASE WHEN c.route_mode = 'inherit' THEN
+			CASE WHEN c.chat_type = 'p2p' THEN COALESCE(p.private_mode, 'silent')
+				ELSE COALESCE(p.group_mode, 'silent') END
+			ELSE c.route_mode END,
+		CASE WHEN c.route_mode = 'inherit' THEN
+			CASE WHEN c.chat_type = 'p2p' THEN p.private_agent_id ELSE p.group_agent_id END
+			ELSE c.route_agent_id END, c.route_revision
+		FROM lweixin_conversation c LEFT JOIN lweixin_routing_policy p
+			ON p.installation_id = c.installation_id AND p.account_id = c.account_id
+		WHERE c.workspace_id = $1 AND c.installation_id = $2
+		ORDER BY c.last_message_at DESC, c.id DESC LIMIT $3 OFFSET $4`, wsID, instID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []Conversation{}
+	out := []ConversationRoute{}
 	for rows.Next() {
-		var c Conversation
-		if err := rows.Scan(&c.ID, &c.AccountID, &c.ChatType, &c.ChatID, &c.LastMessageAt); err != nil {
+		var c ConversationRoute
+		var override, effective pgtype.UUID
+		if err := rows.Scan(&c.ID, &c.AccountID, &c.ChatType, &c.ChatID, &c.LastMessageAt,
+			&c.RouteMode, &override, &c.EffectiveMode, &effective, &c.RouteRevision); err != nil {
 			return nil, err
 		}
+		c.RouteAgentID, c.EffectiveAgentID = uuidPointer(override), uuidPointer(effective)
 		out = append(out, c)
 	}
 	return out, rows.Err()
