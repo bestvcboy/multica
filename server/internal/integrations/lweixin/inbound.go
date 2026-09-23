@@ -47,9 +47,9 @@ func inboundFromMessage(m inboundMessage, selfWxid string) (channel.InboundMessa
 	if m.IsGroup {
 		chatType = channel.ChatTypeGroup
 	}
-	// The pull API has no verified mention target. Literal @ text and the
-	// bot's nickname do not establish that this account was addressed.
-	addressed := !m.IsGroup
+	// The pull API carries no mention metadata, so every group row is
+	// conservatively treated as addressed; group sessions handle the rest.
+	addressed := true
 
 	text := m.Content
 	commandText := text
@@ -81,7 +81,6 @@ func inboundFromMessage(m inboundMessage, selfWxid string) (channel.InboundMessa
 		CommandText:    commandText,
 		AddressedToBot: addressed,
 		ForceFresh:     forceFresh,
-		SkipAgentRun:   m.IsGroup,
 		Source: channel.Source{
 			ChannelType:    TypeLweixin,
 			ChatID:         chatID,
