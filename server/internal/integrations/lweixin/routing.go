@@ -19,8 +19,9 @@ var (
 )
 
 type RouteChoice struct {
-	Mode    string  `json:"mode"`
-	AgentID *string `json:"agent_id"`
+	Mode        string  `json:"mode"`
+	AgentID     *string `json:"agent_id"`
+	TriggerMode *string `json:"trigger_mode,omitempty"`
 }
 
 // Policies are storage-only until channel-task authorization can run without
@@ -39,6 +40,20 @@ type ConversationRoute struct {
 	EffectiveMode    string  `json:"effective_mode"`
 	EffectiveAgentID *string `json:"effective_agent_id"`
 	RouteRevision    int64   `json:"route_revision"`
+	TriggerMode      string  `json:"trigger_mode,omitempty"`
+	TriggerReason    string  `json:"trigger_reason,omitempty"`
+}
+
+func setGroupTrigger(c *ConversationRoute, trigger string) {
+	if c.ChatType != "group" {
+		return
+	}
+	c.TriggerMode = trigger
+	if trigger == "mention" {
+		c.TriggerReason = "mention_metadata_unavailable"
+	} else {
+		c.TriggerReason = "execution_isolation_unavailable"
+	}
 }
 
 func uuidPointer(id pgtype.UUID) *string {
@@ -142,7 +157,7 @@ func (h *History) PatchRouting(ctx context.Context, ws, inst pgtype.UUID, privat
 	var privateID pgtype.UUID
 	var err error
 	if private != nil {
-		if private.Mode == "inherit" {
+		if private.Mode == "inherit" || private.TriggerMode != nil {
 			return RoutingPolicy{}, ErrRouteInvalid
 		}
 		privateID, err = routeAgent(*private)
@@ -150,10 +165,14 @@ func (h *History) PatchRouting(ctx context.Context, ws, inst pgtype.UUID, privat
 			return RoutingPolicy{}, err
 		}
 	}
+	var groupID pgtype.UUID
 	if group != nil {
-		if group.Mode != "silent" || group.AgentID != nil {
-			// Group routing is intentionally reserved for #5.
+		if group.Mode == "inherit" || group.TriggerMode != nil {
 			return RoutingPolicy{}, ErrRouteInvalid
+		}
+		groupID, err = routeAgent(*group)
+		if err != nil {
+			return RoutingPolicy{}, err
 		}
 	}
 	tx, err := h.pool.Begin(ctx)
@@ -166,6 +185,9 @@ func (h *History) PatchRouting(ctx context.Context, ws, inst pgtype.UUID, privat
 		return RoutingPolicy{}, err
 	}
 	if err := validateRouteAgent(ctx, tx, ws, privateID); err != nil {
+		return RoutingPolicy{}, err
+	}
+	if err := validateRouteAgent(ctx, tx, ws, groupID); err != nil {
 		return RoutingPolicy{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO lweixin_routing_policy (workspace_id, installation_id, account_id)
@@ -196,6 +218,25 @@ func (h *History) PatchRouting(ctx context.Context, ws, inst pgtype.UUID, privat
 			return RoutingPolicy{}, err
 		}
 	}
+	if group != nil && (before.GroupDefault.Mode != group.Mode ||
+		(before.GroupDefault.AgentID == nil) != (group.AgentID == nil) ||
+		(before.GroupDefault.AgentID != nil && group.AgentID != nil &&
+			*before.GroupDefault.AgentID != util.UUIDToString(groupID))) {
+		_, err = tx.Exec(ctx, `UPDATE lweixin_routing_policy
+			SET group_revision = group_revision + 1,
+			group_mode = $3, group_agent_id = $4
+			WHERE installation_id = $1 AND account_id = $2`,
+			inst, account, group.Mode, groupID)
+		if err != nil {
+			return RoutingPolicy{}, err
+		}
+		_, err = tx.Exec(ctx, `UPDATE lweixin_conversation SET route_revision = route_revision + 1
+			WHERE installation_id = $1 AND account_id = $2
+			  AND chat_type = 'group' AND route_mode = 'inherit'`, inst, account)
+		if err != nil {
+			return RoutingPolicy{}, err
+		}
+	}
 	result, err := h.getRouting(ctx, tx, inst, account)
 	if err != nil {
 		return RoutingPolicy{}, err
@@ -211,23 +252,29 @@ func (h *History) conversationRoute(ctx context.Context, q interface {
 }, ws, inst, conv pgtype.UUID, account string) (ConversationRoute, error) {
 	var c ConversationRoute
 	var override, effective pgtype.UUID
+	var trigger string
 	err := q.QueryRow(ctx, `SELECT c.id::text, c.account_id, c.chat_type, c.chat_id,
 		c.last_message_at, c.route_mode, c.route_agent_id,
-		CASE WHEN c.route_mode = 'inherit' THEN COALESCE(p.private_mode, 'silent')
+		CASE WHEN c.route_mode = 'inherit' THEN
+			CASE WHEN c.chat_type = 'group' THEN COALESCE(p.group_mode, 'silent')
+				ELSE COALESCE(p.private_mode, 'silent') END
 			ELSE c.route_mode END,
-		CASE WHEN c.route_mode = 'inherit' THEN p.private_agent_id
-			ELSE c.route_agent_id END, c.route_revision
+		CASE WHEN c.route_mode = 'inherit' THEN
+			CASE WHEN c.chat_type = 'group' THEN p.group_agent_id
+				ELSE p.private_agent_id END
+			ELSE c.route_agent_id END, c.route_revision, c.trigger_mode
 		FROM lweixin_conversation c
 		LEFT JOIN lweixin_routing_policy p ON p.installation_id = c.installation_id
 			AND p.account_id = c.account_id
 		WHERE c.id = $1 AND c.workspace_id = $2 AND c.installation_id = $3
-		  AND c.chat_type = 'p2p' AND c.account_id = $4`, conv, ws, inst, account).Scan(
+		  AND c.account_id = $4`, conv, ws, inst, account).Scan(
 		&c.ID, &c.AccountID, &c.ChatType, &c.ChatID, &c.LastMessageAt,
-		&c.RouteMode, &override, &c.EffectiveMode, &effective, &c.RouteRevision)
+		&c.RouteMode, &override, &c.EffectiveMode, &effective, &c.RouteRevision, &trigger)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ConversationRoute{}, ErrHistoryNotFound
 	}
 	c.RouteAgentID, c.EffectiveAgentID = uuidPointer(override), uuidPointer(effective)
+	setGroupTrigger(&c, trigger)
 	return c, err
 }
 
@@ -248,13 +295,33 @@ func (h *History) PatchConversationRoute(ctx context.Context, ws, inst, conv pgt
 	if err := validateRouteAgent(ctx, tx, ws, agent); err != nil {
 		return ConversationRoute{}, err
 	}
+	if choice.TriggerMode != nil && *choice.TriggerMode != "mention" && *choice.TriggerMode != "all" {
+		return ConversationRoute{}, ErrRouteInvalid
+	}
+	if choice.TriggerMode != nil {
+		var chatType string
+		err := tx.QueryRow(ctx, `SELECT chat_type FROM lweixin_conversation
+			WHERE id = $1 AND workspace_id = $2 AND installation_id = $3 AND account_id = $4`,
+			conv, ws, inst, account).Scan(&chatType)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ConversationRoute{}, ErrHistoryNotFound
+		}
+		if err != nil {
+			return ConversationRoute{}, err
+		}
+		if chatType != "group" {
+			return ConversationRoute{}, ErrRouteInvalid
+		}
+	}
 	tag, err := tx.Exec(ctx, `UPDATE lweixin_conversation
 		SET route_revision = route_revision + CASE WHEN
-			(route_mode, route_agent_id) IS DISTINCT FROM ($5::text, $6::uuid)
-			THEN 1 ELSE 0 END, route_mode = $5, route_agent_id = $6
+			(route_mode, route_agent_id, trigger_mode)
+				IS DISTINCT FROM ($5::text, $6::uuid, COALESCE($7::text, trigger_mode))
+			THEN 1 ELSE 0 END, route_mode = $5, route_agent_id = $6,
+			trigger_mode = COALESCE($7::text, trigger_mode)
 		WHERE id = $1 AND workspace_id = $2 AND installation_id = $3
-		  AND account_id = $4 AND chat_type = 'p2p'`,
-		conv, ws, inst, account, choice.Mode, agent)
+		  AND account_id = $4`,
+		conv, ws, inst, account, choice.Mode, agent, choice.TriggerMode)
 	if err != nil {
 		return ConversationRoute{}, fmt.Errorf("update lweixin route: %w", err)
 	}

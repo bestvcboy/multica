@@ -144,7 +144,7 @@ func (h *History) ListConversations(ctx context.Context, wsID, instID pgtype.UUI
 			ELSE c.route_mode END,
 		CASE WHEN c.route_mode = 'inherit' THEN
 			CASE WHEN c.chat_type = 'p2p' THEN p.private_agent_id ELSE p.group_agent_id END
-			ELSE c.route_agent_id END, c.route_revision
+			ELSE c.route_agent_id END, c.route_revision, c.trigger_mode
 		FROM lweixin_conversation c LEFT JOIN lweixin_routing_policy p
 			ON p.installation_id = c.installation_id AND p.account_id = c.account_id
 		WHERE c.workspace_id = $1 AND c.installation_id = $2
@@ -157,11 +157,13 @@ func (h *History) ListConversations(ctx context.Context, wsID, instID pgtype.UUI
 	for rows.Next() {
 		var c ConversationRoute
 		var override, effective pgtype.UUID
+		var trigger string
 		if err := rows.Scan(&c.ID, &c.AccountID, &c.ChatType, &c.ChatID, &c.LastMessageAt,
-			&c.RouteMode, &override, &c.EffectiveMode, &effective, &c.RouteRevision); err != nil {
+			&c.RouteMode, &override, &c.EffectiveMode, &effective, &c.RouteRevision, &trigger); err != nil {
 			return nil, err
 		}
 		c.RouteAgentID, c.EffectiveAgentID = uuidPointer(override), uuidPointer(effective)
+		setGroupTrigger(&c, trigger)
 		out = append(out, c)
 	}
 	return out, rows.Err()

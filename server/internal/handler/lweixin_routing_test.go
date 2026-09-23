@@ -62,9 +62,29 @@ func TestLweixinRoutingAdminAndRevision(t *testing.T) {
 	if err := history.SilentHandler(inst)(ctx, msg); err != nil {
 		t.Fatal(err)
 	}
+	msg.MessageID = "group-one"
+	msg.Source.ChatType, msg.Source.ChatID, msg.Source.SenderID = channel.ChatTypeGroup, "room", "member"
+	if err := history.SilentHandler(inst)(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	msg.MessageID, msg.Source.ChatID = "group-two", "room-two"
+	if err := history.SilentHandler(inst)(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
 	convs, err := history.ListConversations(ctx, ws, inst, 50, 0)
-	if err != nil || len(convs) != 1 {
+	if err != nil || len(convs) != 3 {
 		t.Fatalf("conversation: %+v %v", convs, err)
+	}
+	var privateID, groupID, otherGroupID string
+	for _, conv := range convs {
+		switch conv.ChatID {
+		case "friend":
+			privateID = conv.ID
+		case "room":
+			groupID = conv.ID
+		case "room-two":
+			otherGroupID = conv.ID
+		}
 	}
 	router := chi.NewRouter()
 	router.Route("/api/workspaces/{id}", func(r chi.Router) {
@@ -102,11 +122,16 @@ func TestLweixinRoutingAdminAndRevision(t *testing.T) {
 		member, 403)
 	call("PATCH", base+"/routing", `{"private_default":{"mode":"agent","agent_id":"`+util.UUIDToString(dbid.NewV7())+`"}}`,
 		testUserID, 409)
-	call("PATCH", base+"/routing", `{"group_default":{"mode":"agent","agent_id":"`+agent+`"}}`,
-		testUserID, 400)
+	call("PATCH", base+"/routing", `{"group_default":{"mode":"agent","agent_id":"`+util.UUIDToString(dbid.NewV7())+`"}}`,
+		testUserID, 409)
+	defaults = call("PATCH", base+"/routing", `{"group_default":{"mode":"agent","agent_id":"`+agent+`"}}`,
+		testUserID, 200)
+	if defaults["group_revision"] != float64(1) || defaults["private_revision"] != float64(0) {
+		t.Fatalf("group default affected private: %+v", defaults)
+	}
 	defaults = call("PATCH", base+"/routing", `{"private_default":{"mode":"agent","agent_id":"`+agent+`"}}`,
 		testUserID, 200)
-	if defaults["private_revision"] != float64(1) || defaults["group_revision"] != float64(0) {
+	if defaults["private_revision"] != float64(1) || defaults["group_revision"] != float64(1) {
 		t.Fatalf("revisions: %+v", defaults)
 	}
 	defaults = call("PATCH", base+"/routing", `{"private_default":{"mode":"agent","agent_id":"`+agent+`"}}`,
@@ -114,13 +139,84 @@ func TestLweixinRoutingAdminAndRevision(t *testing.T) {
 	if defaults["private_revision"] != float64(1) {
 		t.Fatalf("idempotent patch changed revision: %+v", defaults)
 	}
-	list := call("GET", base+"/conversations?limit=1&offset=0", "", testUserID, 200)
-	got := list["conversations"].([]any)[0].(map[string]any)
+	list := call("GET", base+"/conversations?limit=50&offset=0", "", testUserID, 200)
+	var got, group, otherGroup map[string]any
+	for _, row := range list["conversations"].([]any) {
+		item := row.(map[string]any)
+		switch item["id"] {
+		case groupID:
+			group = item
+		case otherGroupID:
+			otherGroup = item
+		case privateID:
+			got = item
+		}
+	}
 	if got["effective_mode"] != "agent" || got["effective_agent_id"] != agent ||
 		got["route_revision"] != float64(1) {
 		t.Fatalf("inherited route: %+v", got)
 	}
-	route := base + "/conversations/" + convs[0].ID + "/route"
+	if group["effective_mode"] != "agent" || group["trigger_mode"] != "mention" ||
+		group["trigger_reason"] != "mention_metadata_unavailable" || group["route_revision"] != float64(1) {
+		t.Fatalf("inherited group: %+v", group)
+	}
+	if otherGroup["effective_mode"] != "agent" || otherGroup["trigger_mode"] != "mention" ||
+		otherGroup["route_revision"] != float64(1) {
+		t.Fatalf("second group inherited separately: %+v", otherGroup)
+	}
+	groupRoute := base + "/conversations/" + groupID + "/route"
+	call("PATCH", groupRoute, `{"mode":"inherit","trigger_mode":"invalid"}`, testUserID, 400)
+	call("PATCH", groupRoute, `{"mode":"agent","agent_id":"`+util.UUIDToString(dbid.NewV7())+`"}`, testUserID, 409)
+	group = call("PATCH", groupRoute, `{"mode":"inherit","trigger_mode":"all"}`, testUserID, 200)
+	if group["trigger_mode"] != "all" || group["trigger_reason"] != "execution_isolation_unavailable" ||
+		group["route_revision"] != float64(2) {
+		t.Fatalf("group all: %+v", group)
+	}
+	group = call("PATCH", groupRoute, `{"mode":"inherit","trigger_mode":"all"}`, testUserID, 200)
+	if group["route_revision"] != float64(2) {
+		t.Fatalf("idempotent group patch: %+v", group)
+	}
+	group = call("PATCH", groupRoute, `{"mode":"silent"}`, testUserID, 200)
+	if group["effective_mode"] != "silent" || group["route_revision"] != float64(3) {
+		t.Fatalf("group override: %+v", group)
+	}
+	defaults = call("PATCH", base+"/routing", `{"group_default":{"mode":"silent"}}`, testUserID, 200)
+	if defaults["group_revision"] != float64(2) || defaults["private_revision"] != float64(1) {
+		t.Fatalf("independent group revision: %+v", defaults)
+	}
+	list = call("GET", base+"/conversations?limit=50", "", testUserID, 200)
+	for _, row := range list["conversations"].([]any) {
+		item := row.(map[string]any)
+		if item["id"] == otherGroupID && (item["effective_mode"] != "silent" || item["route_revision"] != float64(2)) {
+			t.Fatalf("second group default did not change independently: %+v", item)
+		}
+	}
+	group = call("PATCH", groupRoute, `{"mode":"agent","agent_id":"`+agent+`"}`, testUserID, 200)
+	if group["effective_mode"] != "agent" || group["effective_agent_id"] != agent ||
+		group["route_revision"] != float64(4) {
+		t.Fatalf("explicit group agent: %+v", group)
+	}
+	group = call("PATCH", groupRoute, `{"mode":"inherit","trigger_mode":"mention"}`, testUserID, 200)
+	if group["effective_mode"] != "silent" || group["route_revision"] != float64(5) {
+		t.Fatalf("restored group inheritance: %+v", group)
+	}
+	defaults = call("PATCH", base+"/routing", `{"group_default":{"mode":"agent","agent_id":"`+agent+`"}}`,
+		testUserID, 200)
+	if defaults["group_revision"] != float64(3) || defaults["private_revision"] != float64(1) {
+		t.Fatalf("group default after override: %+v", defaults)
+	}
+	list = call("GET", base+"/conversations?limit=50", "", testUserID, 200)
+	for _, row := range list["conversations"].([]any) {
+		item := row.(map[string]any)
+		if item["id"] == groupID && (item["effective_mode"] != "agent" || item["route_revision"] != float64(6)) {
+			t.Fatalf("inherited group default not fenced: %+v", item)
+		}
+		if item["id"] == otherGroupID && (item["effective_mode"] != "agent" || item["route_revision"] != float64(3)) {
+			t.Fatalf("second group default not fenced: %+v", item)
+		}
+	}
+	route := base + "/conversations/" + privateID + "/route"
+	call("PATCH", route, `{"mode":"inherit","trigger_mode":"all"}`, testUserID, 400)
 	got = call("PATCH", route, `{"mode":"silent"}`, testUserID, 200)
 	if got["effective_mode"] != "silent" || got["route_revision"] != float64(2) {
 		t.Fatalf("explicit silent route: %+v", got)
@@ -135,6 +231,7 @@ func TestLweixinRoutingAdminAndRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	call("PATCH", route, `{"mode":"agent","agent_id":"`+agent+`"}`, testUserID, 409)
+	call("PATCH", groupRoute, `{"mode":"agent","agent_id":"`+agent+`"}`, testUserID, 409)
 	if _, err := testPool.Exec(ctx, `UPDATE channel_installation
 		SET config = jsonb_set(config, '{app_id}', '"replacement"') WHERE id = $1`, inst); err != nil {
 		t.Fatal(err)
