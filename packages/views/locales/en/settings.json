@@ -1358,6 +1358,26 @@
     "channel_hint": "Chat with agents and create issues from {{channel}}."
   },
   "lweixin": {
+    "routing": {
+      "conversations": "Conversations",
+      "history": "Text history",
+      "no_conversations": "No conversations yet",
+      "no_messages": "No text messages yet",
+      "load_failed": "Could not load conversations",
+      "previous": "Previous",
+      "next": "Next",
+      "private_default": "Default for direct messages",
+      "friend_rule": "Friend rule",
+      "mode": "Routing",
+      "inherit": "Follow default",
+      "silent": "Silent",
+      "agent": "Agent",
+      "choose_agent": "Choose an agent",
+      "unavailable_agent": "Unavailable agent",
+      "save": "Save",
+      "save_failed": "Could not save routing",
+      "dispatch_pending": "Agent assignments are saved, but replies remain silent until channel authorization is enabled."
+    },
     "section_title": "LWeixin",
     "page_description": "Chat with agents in WeChat through your LWeixin gateway.",
     "not_enabled_title": "LWeixin integration not enabled",

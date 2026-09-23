@@ -3328,6 +3328,65 @@ export const EMPTY_REDEEM_LWEIXIN_BINDING_TOKEN_RESPONSE: RedeemLweixinBindingTo
   lweixin_user_id: "",
 };
 
+export const LweixinConversationSchema = z.object({
+  id: z.string(),
+  account_id: z.string().default(""),
+  chat_type: z.string().default(""),
+  chat_id: z.string().default(""),
+  last_message_at: z.string().default(""),
+  route_mode: z.enum(["inherit", "silent", "agent"]).catch("inherit"),
+  route_agent_id: z.string().nullable().default(null),
+  effective_mode: z.enum(["silent", "agent"]).catch("silent"),
+  effective_agent_id: z.string().nullable().default(null),
+  route_revision: z.number().default(0),
+}).transform((row) => ({
+  id: row.id,
+  accountId: row.account_id,
+  chatType: row.chat_type,
+  chatId: row.chat_id,
+  lastMessageAt: row.last_message_at,
+  routeMode: row.route_mode,
+  routeAgentId: row.route_agent_id,
+  effectiveMode: row.effective_mode,
+  effectiveAgentId: row.effective_agent_id,
+  routeRevision: row.route_revision,
+}));
+
+export const ListLweixinConversationsSchema = z.object({
+  conversations: z.array(LweixinConversationSchema).default([]),
+}).loose();
+export const LweixinRoutingSchema = z.object({
+  private_default: z.object({
+    mode: z.enum(["silent", "agent"]).catch("silent"),
+    agent_id: z.string().nullable().default(null),
+  }),
+  group_default: z.object({
+    mode: z.enum(["silent", "agent"]).catch("silent"),
+    agent_id: z.string().nullable().default(null),
+  }).default({ mode: "silent", agent_id: null }),
+  private_revision: z.number().default(0),
+  group_revision: z.number().default(0),
+}).transform((row) => ({
+  privateDefault: { mode: row.private_default.mode, agentId: row.private_default.agent_id },
+  groupDefault: { mode: row.group_default.mode, agentId: row.group_default.agent_id },
+  privateRevision: row.private_revision,
+  groupRevision: row.group_revision,
+}));
+
+export const ListLweixinMessagesSchema = z.object({
+  messages: z.array(z.object({
+    message_id: z.string(),
+    sender_id: z.string().default(""),
+    text: z.string().default(""),
+    received_at: z.string().default(""),
+  }).transform((row) => ({
+    messageId: row.message_id,
+    senderId: row.sender_id,
+    text: row.text,
+    receivedAt: row.received_at,
+  }))).default([]),
+}).loose();
+
 // Skills. Introduced for `POST /api/skills/:id/refresh` (update a skill from
 // its imported source). `config` stays a loose record: the server owns the
 // `origin` provenance shape and may extend it freely.

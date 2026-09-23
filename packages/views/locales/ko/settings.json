@@ -1351,6 +1351,26 @@
     "channel_hint": "{{channel}}에서 에이전트와 대화하고 태스크를 생성합니다."
   },
   "lweixin": {
+    "routing": {
+      "conversations": "대화",
+      "history": "텍스트 기록",
+      "no_conversations": "아직 대화가 없습니다",
+      "no_messages": "아직 텍스트 메시지가 없습니다",
+      "load_failed": "대화를 불러올 수 없습니다",
+      "previous": "이전",
+      "next": "다음",
+      "private_default": "개인 대화 기본값",
+      "friend_rule": "친구 규칙",
+      "mode": "연결 방식",
+      "inherit": "기본값 따르기",
+      "silent": "응답 안 함",
+      "agent": "에이전트",
+      "choose_agent": "에이전트 선택",
+      "unavailable_agent": "사용할 수 없는 에이전트",
+      "save": "저장",
+      "save_failed": "연결 규칙을 저장할 수 없습니다",
+      "dispatch_pending": "할당은 저장되지만 채널 권한이 활성화될 때까지 답장은 전송되지 않습니다."
+    },
     "section_title": "LWeixin",
     "page_description": "LWeixin 게이트웨이를 통해 WeChat에서 agent와 대화하세요.",
     "not_enabled_title": "LWeixin 연동이 활성화되지 않았습니다",

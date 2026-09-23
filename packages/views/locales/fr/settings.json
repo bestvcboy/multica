@@ -1358,6 +1358,26 @@
     "channel_hint": "Discutez avec les agents et créez des tâches depuis {{channel}}."
   },
   "lweixin": {
+    "routing": {
+      "conversations": "Conversations",
+      "history": "Historique des messages",
+      "no_conversations": "Aucune conversation",
+      "no_messages": "Aucun message texte",
+      "load_failed": "Impossible de charger les conversations",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "private_default": "Défaut des messages directs",
+      "friend_rule": "Règle du contact",
+      "mode": "Routage",
+      "inherit": "Suivre le défaut",
+      "silent": "Silencieux",
+      "agent": "Agent",
+      "choose_agent": "Choisir un agent",
+      "unavailable_agent": "Agent indisponible",
+      "save": "Enregistrer",
+      "save_failed": "Impossible d’enregistrer le routage",
+      "dispatch_pending": "Les affectations sont enregistrées, mais les réponses restent silencieuses jusqu’à l’activation de l’autorisation du canal."
+    },
     "section_title": "LWeixin",
     "page_description": "Discutez avec les agents dans WeChat via votre passerelle LWeixin.",
     "not_enabled_title": "Intégration LWeixin non activée",

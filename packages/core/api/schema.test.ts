@@ -583,6 +583,52 @@ describe("ApiClient schema fallback", () => {
   });
 
   describe("LWeixin integration", () => {
+    it("parses routing and friend overrides with safe defaults for drift", async () => {
+      const client = new ApiClient("https://api.example.test");
+      stubFetchJson({ private_default: { mode: "agent", agent_id: "agent-1" }, group_default: { mode: "silent", agent_id: null }, private_revision: 2, group_revision: 0 });
+      await expect(client.getLweixinRouting("ws-1", "inst-1")).resolves.toMatchObject({
+        privateDefault: { mode: "agent", agentId: "agent-1" }, privateRevision: 2,
+      });
+      stubFetchJson({ private_default: { mode: 5 } });
+      await expect(client.getLweixinRouting("ws-1", "inst-1")).resolves.toMatchObject({
+        privateDefault: { mode: "silent", agentId: null },
+      });
+      stubFetchJson({ private_default: { mode: "silent", agent_id: null } });
+      await client.updateLweixinRouting("ws-1", "inst-1", { mode: "silent", agentId: null });
+      expect(vi.mocked(fetch).mock.lastCall?.[1]).toMatchObject({
+        method: "PATCH", body: JSON.stringify({ private_default: { mode: "silent", agent_id: null } }),
+      });
+      stubFetchJson({ id: "c-1", chat_type: "p2p", chat_id: "friend", route_mode: "silent" });
+      await client.updateLweixinConversationRoute("ws-1", "inst-1", "c-1", "silent", null);
+      expect(vi.mocked(fetch).mock.lastCall?.[1]).toMatchObject({
+        method: "PATCH", body: JSON.stringify({ mode: "silent", agent_id: null }),
+      });
+      stubFetchJson({ id: 4 });
+      await expect(client.updateLweixinConversationRoute("ws-1", "inst-1", "c-1", "agent", "agent-1")).resolves.toMatchObject({
+        id: "", effectiveMode: "silent", routeMode: "inherit",
+      });
+      stubFetchJson({ private_default: "invalid" });
+      await expect(client.updateLweixinRouting("ws-1", "inst-1", { mode: "agent", agentId: "agent-1" })).resolves.toMatchObject({
+        privateDefault: { mode: "silent", agentId: null },
+      });
+    });
+
+    it("parses paginated history and falls back when responses are malformed", async () => {
+      const client = new ApiClient("https://api.example.test");
+      stubFetchJson({ conversations: [{ id: "c-1", chat_type: "direct", chat_id: "friend", last_message_at: "2026-09-23T00:00:00Z" }] });
+      await expect(client.listLweixinConversations("ws-1", "inst-1", 50, 0)).resolves.toMatchObject({
+        conversations: [{ id: "c-1", chatId: "friend" }],
+      });
+      stubFetchJson({ conversations: "bad" });
+      await expect(client.listLweixinConversations("ws-1", "inst-1", 50, 0)).resolves.toEqual({ conversations: [] });
+      stubFetchJson({ messages: [{ message_id: "m-1", sender_id: "friend", text: "hello", received_at: "2026-09-23T00:00:00Z" }] });
+      await expect(client.listLweixinMessages("ws-1", "inst-1", "c-1", 50, 0)).resolves.toMatchObject({
+        messages: [{ messageId: "m-1", text: "hello" }],
+      });
+      stubFetchJson({ messages: [{ message_id: 2 }] });
+      await expect(client.listLweixinMessages("ws-1", "inst-1", "c-1", 50, 0)).resolves.toEqual({ messages: [] });
+    });
+
     it("falls back to a safe empty installation list when the response is malformed", async () => {
       stubFetchJson({ installations: "not-an-array", configured: true });
       const client = new ApiClient("https://api.example.test");

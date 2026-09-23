@@ -1351,6 +1351,26 @@
     "channel_hint": "在 {{channel}} 中与智能体对话、创建任务。"
   },
   "lweixin": {
+    "routing": {
+      "conversations": "会话",
+      "history": "文字记录",
+      "no_conversations": "暂无会话",
+      "no_messages": "暂无文字消息",
+      "load_failed": "无法加载会话",
+      "previous": "上一页",
+      "next": "下一页",
+      "private_default": "私聊默认接待",
+      "friend_rule": "朋友接待规则",
+      "mode": "接待方式",
+      "inherit": "跟随默认",
+      "silent": "静默",
+      "agent": "智能体",
+      "choose_agent": "选择智能体",
+      "unavailable_agent": "不可用的智能体",
+      "save": "保存",
+      "save_failed": "无法保存接待规则",
+      "dispatch_pending": "已保存智能体分配，但渠道授权启用前仍不会自动回复。"
+    },
     "section_title": "微信 (LWeixin)",
     "page_description": "通过 LWeixin 网关在微信中与智能体对话。",
     "not_enabled_title": "微信集成未启用",

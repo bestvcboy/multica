@@ -1351,6 +1351,26 @@
     "channel_hint": "{{channel}} でエージェントと会話し、タスクを作成します。"
   },
   "lweixin": {
+    "routing": {
+      "conversations": "会話",
+      "history": "テキスト履歴",
+      "no_conversations": "会話はまだありません",
+      "no_messages": "テキストメッセージはまだありません",
+      "load_failed": "会話を読み込めませんでした",
+      "previous": "前へ",
+      "next": "次へ",
+      "private_default": "ダイレクトメッセージの既定",
+      "friend_rule": "友だちのルール",
+      "mode": "ルーティング",
+      "inherit": "既定に従う",
+      "silent": "応答しない",
+      "agent": "エージェント",
+      "choose_agent": "エージェントを選択",
+      "unavailable_agent": "利用できないエージェント",
+      "save": "保存",
+      "save_failed": "ルーティングを保存できませんでした",
+      "dispatch_pending": "割り当ては保存されますが、チャネル認可が有効になるまで返信は行われません。"
+    },
     "section_title": "LWeixin",
     "page_description": "LWeixin ゲートウェイ経由で WeChat から agent と会話します。",
     "not_enabled_title": "LWeixin 連携が有効ではありません",
