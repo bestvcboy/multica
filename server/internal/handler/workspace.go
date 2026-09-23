@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/analytics"
+	"github.com/multica-ai/multica/server/internal/integrations/lweixin"
 	"github.com/multica-ai/multica/server/internal/issuestatus"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
@@ -1215,6 +1216,10 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		{
 			name: "delete leaf data",
 			run:  func() error { return qtx.DeleteWorkspaceLeafData(ctx, requester.WorkspaceID) },
+		},
+		{
+			name: "delete lweixin history",
+			run:  func() error { return lweixin.DeleteWorkspaceHistory(ctx, tx, requester.WorkspaceID) },
 		},
 		{
 			name: "delete autopilot runs",

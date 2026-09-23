@@ -4,15 +4,93 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/integrations/lweixin"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
+
+func lweixinPage(w http.ResponseWriter, r *http.Request) (int, int, bool) {
+	limit, offset := 50, 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 100 {
+			writeError(w, http.StatusBadRequest, "limit must be between 1 and 100")
+			return 0, 0, false
+		}
+		limit = n
+	}
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 || n > 1000000 {
+			writeError(w, http.StatusBadRequest, "invalid offset")
+			return 0, 0, false
+		}
+		offset = n
+	}
+	return limit, offset, true
+}
+
+func (h *Handler) lweixinHistoryScope(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
+	if h.LweixinHistory == nil {
+		writeFeatureDisabled(w, "lweixin_not_configured", "lweixin integration not configured")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	ws, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "workspace id")
+	if !ok {
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	inst, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "installationId"), "installation id")
+	return ws, inst, ok
+}
+
+func (h *Handler) ListLweixinConversations(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	limit, offset, ok := lweixinPage(w, r)
+	if !ok {
+		return
+	}
+	rows, err := h.LweixinHistory.ListConversations(r.Context(), ws, inst, limit, offset)
+	if errors.Is(err, lweixin.ErrHistoryNotFound) {
+		writeError(w, http.StatusNotFound, "lweixin installation not found")
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list lweixin conversations")
+	} else {
+		writeJSON(w, http.StatusOK, map[string]any{"conversations": rows})
+	}
+}
+
+func (h *Handler) ListLweixinMessages(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	conv, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "conversationId"), "conversation id")
+	if !ok {
+		return
+	}
+	limit, offset, ok := lweixinPage(w, r)
+	if !ok {
+		return
+	}
+	rows, err := h.LweixinHistory.ListMessages(r.Context(), ws, inst, conv, limit, offset)
+	if errors.Is(err, lweixin.ErrHistoryNotFound) {
+		writeError(w, http.StatusNotFound, "lweixin conversation not found")
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list lweixin messages")
+	} else {
+		writeJSON(w, http.StatusOK, map[string]any{"messages": rows})
+	}
+}
 
 // LweixinInstallationResponse is the wire shape for a LWEIXIN installation
 // row. The encrypted API token in config is INTENTIONALLY absent: server-internal.

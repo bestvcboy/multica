@@ -25,6 +25,7 @@ type installConfig struct {
 	AppID             string `json:"app_id"`
 	BaseURL           string `json:"base_url"`
 	APITokenEncrypted string `json:"api_token_encrypted,omitempty"`
+	SilentReceive     bool   `json:"silent_receive,omitempty"`
 }
 
 // credentials is the decrypted runtime form the HTTP client dials with.
@@ -102,4 +103,3 @@ func stripSpace(s string) string {
 		return r
 	}, s)
 }
-

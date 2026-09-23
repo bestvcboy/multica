@@ -43,6 +43,7 @@ type installQueries interface {
 	UpsertChannelInstallation(ctx context.Context, arg db.UpsertChannelInstallationParams) (db.ChannelInstallation, error)
 	ReclaimDeadChannelInstallationByAppID(ctx context.Context, arg db.ReclaimDeadChannelInstallationByAppIDParams) (pgtype.UUID, error)
 	GetChannelInstallationOwnerByAppID(ctx context.Context, arg db.GetChannelInstallationOwnerByAppIDParams) (db.GetChannelInstallationOwnerByAppIDRow, error)
+	GetChannelInstallationByAppID(ctx context.Context, arg db.GetChannelInstallationByAppIDParams) (db.ChannelInstallation, error)
 	ListChannelInstallationsByWorkspace(ctx context.Context, arg db.ListChannelInstallationsByWorkspaceParams) ([]db.ChannelInstallation, error)
 	GetChannelInstallationInWorkspace(ctx context.Context, arg db.GetChannelInstallationInWorkspaceParams) (db.ChannelInstallation, error)
 	SetChannelInstallationStatus(ctx context.Context, arg db.SetChannelInstallationStatusParams) error
@@ -106,6 +107,7 @@ func (s *InstallService) Register(ctx context.Context, p RegisterParams) (db.Cha
 		AppID:             p.AppID,
 		BaseURL:           p.BaseURL,
 		APITokenEncrypted: base64.StdEncoding.EncodeToString(sealed),
+		SilentReceive:     true,
 	})
 	if err != nil {
 		return db.ChannelInstallation{}, fmt.Errorf("encode lweixin installation config: %w", err)
@@ -150,6 +152,28 @@ func (s *InstallService) persistInstall(ctx context.Context, p installPersist) (
 		AgentID:     p.agentID,
 	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return db.ChannelInstallation{}, fmt.Errorf("reclaim dead lweixin installation: %w", err)
+	}
+	// Reconnecting the same account must not switch a legacy installation
+	// to silent before its routing policy is migrated by #8.
+	previous, err := qtx.GetChannelInstallationByAppID(ctx, db.GetChannelInstallationByAppIDParams{
+		ChannelType: string(TypeLweixin), AppID: p.appIDKey,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return db.ChannelInstallation{}, fmt.Errorf("load prior lweixin installation: %w", err)
+	}
+	if err == nil && previous.WorkspaceID == p.wsID && previous.AgentID == p.agentID {
+		var old, next installConfig
+		if err := json.Unmarshal(previous.Config, &old); err != nil {
+			return db.ChannelInstallation{}, fmt.Errorf("decode prior lweixin config: %w", err)
+		}
+		if err := json.Unmarshal(p.configJSON, &next); err != nil {
+			return db.ChannelInstallation{}, err
+		}
+		next.SilentReceive = old.SilentReceive
+		p.configJSON, err = json.Marshal(next)
+		if err != nil {
+			return db.ChannelInstallation{}, err
+		}
 	}
 
 	inst, err := qtx.UpsertChannelInstallation(ctx, db.UpsertChannelInstallationParams{
