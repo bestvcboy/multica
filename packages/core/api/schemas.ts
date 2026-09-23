@@ -3339,6 +3339,8 @@ export const LweixinConversationSchema = z.object({
   effective_mode: z.enum(["silent", "agent"]).catch("silent"),
   effective_agent_id: z.string().nullable().default(null),
   route_revision: z.number().default(0),
+  trigger_mode: z.enum(["mention", "all"]).catch("mention").default("mention"),
+  trigger_reason: z.enum(["mention_metadata_unavailable", "execution_isolation_unavailable"]).nullable().catch("mention_metadata_unavailable").default("mention_metadata_unavailable"),
 }).transform((row) => ({
   id: row.id,
   accountId: row.account_id,
@@ -3350,6 +3352,8 @@ export const LweixinConversationSchema = z.object({
   effectiveMode: row.effective_mode,
   effectiveAgentId: row.effective_agent_id,
   routeRevision: row.route_revision,
+  triggerMode: row.trigger_mode,
+  triggerReason: row.trigger_reason,
 }));
 
 export const ListLweixinConversationsSchema = z.object({

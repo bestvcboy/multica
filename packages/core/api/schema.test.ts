@@ -587,7 +587,7 @@ describe("ApiClient schema fallback", () => {
       const client = new ApiClient("https://api.example.test");
       stubFetchJson({ private_default: { mode: "agent", agent_id: "agent-1" }, group_default: { mode: "silent", agent_id: null }, private_revision: 2, group_revision: 0 });
       await expect(client.getLweixinRouting("ws-1", "inst-1")).resolves.toMatchObject({
-        privateDefault: { mode: "agent", agentId: "agent-1" }, privateRevision: 2,
+        privateDefault: { mode: "agent", agentId: "agent-1" }, groupDefault: { mode: "silent", agentId: null }, privateRevision: 2,
       });
       stubFetchJson({ private_default: { mode: 5 } });
       await expect(client.getLweixinRouting("ws-1", "inst-1")).resolves.toMatchObject({
@@ -598,14 +598,28 @@ describe("ApiClient schema fallback", () => {
       expect(vi.mocked(fetch).mock.lastCall?.[1]).toMatchObject({
         method: "PATCH", body: JSON.stringify({ private_default: { mode: "silent", agent_id: null } }),
       });
+      stubFetchJson({ private_default: { mode: "silent", agent_id: null }, group_default: { mode: "agent", agent_id: "agent-2" } });
+      await expect(client.updateLweixinGroupRouting("ws-1", "inst-1", { mode: "agent", agentId: "agent-2" })).resolves.toMatchObject({
+        groupDefault: { mode: "agent", agentId: "agent-2" },
+      });
+      expect(vi.mocked(fetch).mock.lastCall?.[1]).toMatchObject({
+        method: "PATCH", body: JSON.stringify({ group_default: { mode: "agent", agent_id: "agent-2" } }),
+      });
       stubFetchJson({ id: "c-1", chat_type: "p2p", chat_id: "friend", route_mode: "silent" });
       await client.updateLweixinConversationRoute("ws-1", "inst-1", "c-1", "silent", null);
       expect(vi.mocked(fetch).mock.lastCall?.[1]).toMatchObject({
         method: "PATCH", body: JSON.stringify({ mode: "silent", agent_id: null }),
       });
+      stubFetchJson({ id: "c-2", chat_type: "group", chat_id: "room", trigger_mode: "all", trigger_reason: "execution_isolation_unavailable" });
+      await expect(client.updateLweixinConversationRoute("ws-1", "inst-1", "c-2", "agent", "agent-2", "all")).resolves.toMatchObject({
+        triggerMode: "all", triggerReason: "execution_isolation_unavailable",
+      });
+      expect(vi.mocked(fetch).mock.lastCall?.[1]).toMatchObject({
+        method: "PATCH", body: JSON.stringify({ mode: "agent", agent_id: "agent-2", trigger_mode: "all" }),
+      });
       stubFetchJson({ id: 4 });
       await expect(client.updateLweixinConversationRoute("ws-1", "inst-1", "c-1", "agent", "agent-1")).resolves.toMatchObject({
-        id: "", effectiveMode: "silent", routeMode: "inherit",
+        id: "", effectiveMode: "silent", routeMode: "inherit", triggerMode: "mention", triggerReason: "mention_metadata_unavailable",
       });
       stubFetchJson({ private_default: "invalid" });
       await expect(client.updateLweixinRouting("ws-1", "inst-1", { mode: "agent", agentId: "agent-1" })).resolves.toMatchObject({
@@ -617,7 +631,11 @@ describe("ApiClient schema fallback", () => {
       const client = new ApiClient("https://api.example.test");
       stubFetchJson({ conversations: [{ id: "c-1", chat_type: "direct", chat_id: "friend", last_message_at: "2026-09-23T00:00:00Z" }] });
       await expect(client.listLweixinConversations("ws-1", "inst-1", 50, 0)).resolves.toMatchObject({
-        conversations: [{ id: "c-1", chatId: "friend" }],
+        conversations: [{ id: "c-1", chatId: "friend", triggerMode: "mention", triggerReason: "mention_metadata_unavailable" }],
+      });
+      stubFetchJson({ conversations: [{ id: "c-2", chat_type: "group", chat_id: "room", trigger_mode: "future", trigger_reason: 42 }] });
+      await expect(client.listLweixinConversations("ws-1", "inst-1", 50, 0)).resolves.toMatchObject({
+        conversations: [{ id: "c-2", triggerMode: "mention", triggerReason: "mention_metadata_unavailable" }],
       });
       stubFetchJson({ conversations: "bad" });
       await expect(client.listLweixinConversations("ws-1", "inst-1", 50, 0)).resolves.toEqual({ conversations: [] });

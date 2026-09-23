@@ -56,10 +56,14 @@ export interface LweixinConversation {
   effectiveMode: LweixinDefaultMode;
   effectiveAgentId: string | null;
   routeRevision: number;
+  triggerMode: LweixinGroupTriggerMode;
+  triggerReason: LweixinGroupTriggerReason;
 }
 
 export type LweixinDefaultMode = "silent" | "agent";
 export type LweixinRouteMode = "inherit" | LweixinDefaultMode;
+export type LweixinGroupTriggerMode = "mention" | "all";
+export type LweixinGroupTriggerReason = "mention_metadata_unavailable" | "execution_isolation_unavailable" | null;
 export interface LweixinRoutePolicy {
   mode: LweixinDefaultMode;
   agentId: string | null;

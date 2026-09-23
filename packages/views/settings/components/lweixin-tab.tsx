@@ -35,7 +35,7 @@ import { useActorName } from "@multica/core/workspace/hooks";
 import { lweixinConversationsOptions, lweixinInstallationsOptions, lweixinKeys, lweixinMessagesOptions, lweixinRoutingOptions } from "@multica/core/lweixin";
 import { api } from "@multica/core/api";
 import type { LweixinInstallation } from "@multica/core/types";
-import type { LweixinRouteMode } from "@multica/core/types/lweixin";
+import type { LweixinGroupTriggerMode, LweixinGroupTriggerReason, LweixinRouteMode } from "@multica/core/types/lweixin";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { openExternal } from "../../platform";
 import { useLocale, useT } from "../../i18n";
@@ -287,6 +287,24 @@ function LweixinConversations({ wsId, installationId }: { wsId: string; installa
         )}
         <p className="text-caption text-muted-foreground">{t(($) => $.lweixin.routing.dispatch_pending)}</p>
       </section>
+      <section className="space-y-3">
+        <h3 className="text-body font-semibold">{t(($) => $.lweixin.routing.group_default)}</h3>
+        {routingLoading ? <p>{t(($) => $.lweixin.loading)}</p> : routingError ? (
+          <p role="alert">{t(($) => $.lweixin.routing.load_failed)}</p>
+        ) : routing && (
+          <RouteEditor
+            key={`group-default-${routing.groupRevision}`}
+            mode={routing.groupDefault.mode}
+            agentId={routing.groupDefault.agentId}
+            agents={agents}
+            onSave={async (mode, agentId) => {
+              await api.updateLweixinGroupRouting(wsId, installationId, { mode: mode === "agent" ? "agent" : "silent", agentId });
+              await qc.invalidateQueries({ queryKey: lweixinKeys.routing(wsId, installationId) });
+              await qc.invalidateQueries({ queryKey: [...lweixinKeys.all(wsId), installationId, "conversations"] });
+            }}
+          />
+        )}
+      </section>
       <div className="grid gap-4 lg:grid-cols-2">
       <section className="min-w-0 space-y-3">
         <h3 className="text-body font-semibold">{t(($) => $.lweixin.routing.conversations)}</h3>
@@ -304,6 +322,8 @@ function LweixinConversations({ wsId, installationId }: { wsId: string; installa
           >
             <span className="block truncate">{conversation.chatId}</span>
             <span className="text-micro text-muted-foreground">
+              {conversation.chatType === "group" ? t(($) => $.lweixin.routing.group_chat) : t(($) => $.lweixin.routing.direct_chat)}
+              {" · "}
               {conversation.routeMode === "inherit" ? t(($) => $.lweixin.routing.inherit) :
                 conversation.routeMode === "agent" ? t(($) => $.lweixin.routing.agent) : t(($) => $.lweixin.routing.silent)}
             </span>
@@ -327,6 +347,24 @@ function LweixinConversations({ wsId, installationId }: { wsId: string; installa
               allowInherit
               onSave={async (mode, agentId) => {
                 await api.updateLweixinConversationRoute(wsId, installationId, selectedConversation.id, mode, agentId);
+                await qc.invalidateQueries({ queryKey: [...lweixinKeys.all(wsId), installationId, "conversations"] });
+              }}
+            />
+          </div>
+        )}
+        {selectedConversation?.chatType === "group" && (
+          <div className="space-y-2 border-b pb-3">
+            <h4 className="text-caption font-medium">{t(($) => $.lweixin.routing.group_rule)}</h4>
+            <RouteEditor
+              key={`${selectedConversation.id}-${selectedConversation.routeRevision}-${selectedConversation.triggerMode}`}
+              mode={selectedConversation.routeMode}
+              agentId={selectedConversation.routeAgentId}
+              agents={agents}
+              allowInherit
+              triggerMode={selectedConversation.triggerMode}
+              triggerReason={selectedConversation.triggerReason}
+              onSave={async (mode, agentId, triggerMode) => {
+                await api.updateLweixinConversationRoute(wsId, installationId, selectedConversation.id, mode, agentId, triggerMode);
                 await qc.invalidateQueries({ queryKey: [...lweixinKeys.all(wsId), installationId, "conversations"] });
               }}
             />
@@ -358,26 +396,29 @@ function LweixinConversations({ wsId, installationId }: { wsId: string; installa
 }
 
 function RouteEditor({
-  mode, agentId, agents, onSave, allowInherit = false,
+  mode, agentId, agents, onSave, allowInherit = false, triggerMode, triggerReason,
 }: {
   mode: LweixinRouteMode;
   agentId: string | null;
   agents: { id: string; name: string; archived_at?: string | null }[];
-  onSave: (mode: LweixinRouteMode, agentId: string | null) => Promise<void>;
+  onSave: (mode: LweixinRouteMode, agentId: string | null, triggerMode?: LweixinGroupTriggerMode) => Promise<void>;
   allowInherit?: boolean;
+  triggerMode?: LweixinGroupTriggerMode;
+  triggerReason?: LweixinGroupTriggerReason;
 }) {
   const { t } = useT("settings");
   const [draftMode, setDraftMode] = useState(mode);
   const [draftAgent, setDraftAgent] = useState(agentId ?? "");
+  const [draftTrigger, setDraftTrigger] = useState<LweixinGroupTriggerMode>(triggerMode ?? "mention");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const available = agents.filter((agent) => !agent.archived_at);
-  const isDirty = draftMode !== mode || (draftMode === "agent" && draftAgent !== agentId);
+  const isDirty = draftMode !== mode || (draftMode === "agent" && draftAgent !== agentId) || (triggerMode !== undefined && draftTrigger !== triggerMode);
   async function save() {
     setSaving(true);
     setError("");
     try {
-      await onSave(draftMode, draftMode === "agent" ? draftAgent : null);
+      await onSave(draftMode, draftMode === "agent" ? draftAgent : null, triggerMode === undefined ? undefined : draftTrigger);
     } catch (e) {
       setError(e instanceof Error ? e.message : t(($) => $.lweixin.routing.save_failed));
     } finally {
@@ -406,9 +447,24 @@ function RouteEditor({
           </select>
         </label>
       )}
+      {triggerMode !== undefined && (
+        <label className="grid min-w-40 gap-1 text-caption">
+          {t(($) => $.lweixin.routing.trigger)}
+          <select className="h-9 rounded-sm border bg-background px-2 text-body" value={draftTrigger} disabled={saving} onChange={(e) => setDraftTrigger(e.target.value as LweixinGroupTriggerMode)}>
+            <option value="mention">{t(($) => $.lweixin.routing.trigger_mention)}</option>
+            <option value="all">{t(($) => $.lweixin.routing.trigger_all)}</option>
+          </select>
+        </label>
+      )}
       <Button size="sm" disabled={!isDirty || saving || (draftMode === "agent" && (!draftAgent || !available.some((agent) => agent.id === draftAgent)))} onClick={save} aria-busy={saving}>
         {t(($) => $.lweixin.routing.save)}
       </Button>
+      {triggerMode !== undefined && draftTrigger === "mention" && triggerReason === "mention_metadata_unavailable" && (
+        <p role="status" className="w-full text-caption text-muted-foreground">{t(($) => $.lweixin.routing.mention_unavailable)}</p>
+      )}
+      {triggerMode !== undefined && draftTrigger === "all" && (
+        <p className="w-full text-caption text-muted-foreground">{t(($) => $.lweixin.routing.all_warning)}</p>
+      )}
       {error && <p role="alert" className="w-full text-caption text-destructive">{error}</p>}
     </div>
   );

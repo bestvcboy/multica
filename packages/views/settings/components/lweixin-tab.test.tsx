@@ -20,7 +20,10 @@ vi.mock("@tanstack/react-query", () => ({
     mocks.queried.push(key);
     if (key.includes("members")) return { data: [{ user_id: "user-1", role: mocks.role }] };
     if (key.includes("agents")) return { data: [{ id: "agent-2", name: "Agent Two" }] };
-    if (key.includes("routing")) return { data: { privateDefault: { mode: "silent", agentId: null }, privateRevision: 0 } };
+    if (key.includes("routing")) return { data: {
+      privateDefault: { mode: "silent", agentId: null }, privateRevision: 0,
+      groupDefault: { mode: "silent", agentId: null }, groupRevision: 0,
+    } };
     if (key.includes("conversations")) return { data: { conversations: mocks.conversations } };
     if (key.includes("messages")) return { data: { messages: [{ messageId: "m-1", senderId: "friend-1", text: "Hello", receivedAt: "2026-09-23" }] } };
     return { data: { installations: mocks.installations, configured: true, install_supported: true } };
@@ -41,6 +44,7 @@ vi.mock("@multica/core/auth", () => {
 vi.mock("@multica/core/api", () => ({ api: {
   registerLweixinBot: mocks.register,
   updateLweixinRouting: mocks.updateDefault,
+  updateLweixinGroupRouting: mocks.updateDefault,
   updateLweixinConversationRoute: mocks.updateRoute,
 } }));
 vi.mock("@multica/core/workspace/hooks", () => ({ useActorName: () => ({ getAgentName: () => "Agent" }) }));
@@ -120,14 +124,37 @@ describe("LweixinTab history", () => {
     mocks.updateRoute.mockResolvedValue({});
     renderTab();
     await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
-    await userEvent.selectOptions(screen.getByLabelText("Routing"), "agent");
+    await userEvent.selectOptions(screen.getAllByLabelText("Routing")[0]!, "agent");
     await userEvent.selectOptions(screen.getByLabelText("Agent"), "agent-2");
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
     await waitFor(() => expect(mocks.updateDefault).toHaveBeenCalledWith("workspace-1", "inst-1", { mode: "agent", agentId: "agent-2" }));
     await userEvent.click(screen.getByText("friend-1"));
-    await userEvent.selectOptions(screen.getAllByLabelText("Routing")[1]!, "silent");
-    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[1]!);
+    await userEvent.selectOptions(screen.getAllByLabelText("Routing")[2]!, "silent");
+    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[2]!);
     await waitFor(() => expect(mocks.updateRoute).toHaveBeenCalledWith("workspace-1", "inst-1", "c-1", "silent", null));
+  });
+
+  it("edits group defaults and a group-only trigger without enabling replies", async () => {
+    mocks.conversations = [{
+      id: "g-1", chatId: "room-1", chatType: "group", routeMode: "inherit",
+      routeAgentId: null, routeRevision: 0, triggerMode: "mention", triggerReason: "mention_metadata_unavailable",
+    }];
+    mocks.updateDefault.mockResolvedValue({});
+    mocks.updateRoute.mockResolvedValue({});
+    renderTab();
+    await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
+    expect(screen.getByText("These assignments do not enable automatic replies while isolated execution is unavailable.")).toBeTruthy();
+    await userEvent.selectOptions(screen.getAllByLabelText("Routing")[1]!, "agent");
+    await userEvent.selectOptions(screen.getByLabelText("Agent"), "agent-2");
+    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[1]!);
+    await waitFor(() => expect(mocks.updateDefault).toHaveBeenCalledWith("workspace-1", "inst-1", { mode: "agent", agentId: "agent-2" }));
+
+    await userEvent.click(screen.getByText("room-1"));
+    expect(screen.getByText("The gateway does not provide a verified mention target. Mention-only messages are recorded without a reply.")).toBeTruthy();
+    await userEvent.selectOptions(screen.getByLabelText("Group trigger"), "all");
+    expect(screen.getByText("Every new text message in this group will be eligible for a run once isolated execution is enabled.")).toBeTruthy();
+    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[2]!);
+    await waitFor(() => expect(mocks.updateRoute).toHaveBeenCalledWith("workspace-1", "inst-1", "g-1", "inherit", null, "all"));
   });
 
   it("pages conversations without retaining the previous selection", async () => {

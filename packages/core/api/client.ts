@@ -1,5 +1,5 @@
 import type { IssueWakeup, IssueWakeupSummaryRow } from "../types/issue-wakeup";
-import type { ListLweixinConversationsResponse, ListLweixinMessagesResponse, LweixinConversation, LweixinRouting, LweixinRouteMode, LweixinRoutePolicy } from "../types/lweixin";
+import type { ListLweixinConversationsResponse, ListLweixinMessagesResponse, LweixinConversation, LweixinRouting, LweixinRouteMode, LweixinRoutePolicy, LweixinGroupTriggerMode } from "../types/lweixin";
 import type { WorkspaceWakeupPage, WorkspaceWakeupFilters } from "../types/issue-wakeup";
 import { WorkspaceWakeupPageSchema, IssueWakeupSchema, IssueWakeupSummaryRowSchema } from "./schemas";
 import { ListLweixinConversationsSchema, ListLweixinMessagesSchema, LweixinRoutingSchema, LweixinConversationSchema } from "./schemas";
@@ -5092,14 +5092,27 @@ export class ApiClient {
     }, { endpoint: "PATCH /api/workspaces/:id/lweixin/installations/:installationId/routing" });
   }
 
-  async updateLweixinConversationRoute(workspaceId: string, installationId: string, conversationId: string, mode: LweixinRouteMode, agentId: string | null): Promise<LweixinConversation> {
+  async updateLweixinGroupRouting(workspaceId: string, installationId: string, groupDefault: LweixinRoutePolicy): Promise<LweixinRouting> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/lweixin/installations/${installationId}/routing`, {
+      method: "PATCH",
+      body: JSON.stringify({ group_default: { mode: groupDefault.mode, agent_id: groupDefault.mode === "agent" ? groupDefault.agentId : null } }),
+    });
+    return parseWithFallback(raw, LweixinRoutingSchema, {
+      privateDefault: { mode: "silent", agentId: null },
+      groupDefault: { mode: "silent", agentId: null },
+      privateRevision: 0, groupRevision: 0,
+    }, { endpoint: "PATCH /api/workspaces/:id/lweixin/installations/:installationId/routing" });
+  }
+
+  async updateLweixinConversationRoute(workspaceId: string, installationId: string, conversationId: string, mode: LweixinRouteMode, agentId: string | null, triggerMode?: LweixinGroupTriggerMode): Promise<LweixinConversation> {
     const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/lweixin/installations/${installationId}/conversations/${conversationId}/route`, {
       method: "PATCH",
-      body: JSON.stringify({ mode, agent_id: mode === "agent" ? agentId : null }),
+      body: JSON.stringify({ mode, agent_id: mode === "agent" ? agentId : null, ...(triggerMode ? { trigger_mode: triggerMode } : {}) }),
     });
     return parseWithFallback(raw, LweixinConversationSchema, {
       id: "", accountId: "", chatType: "", chatId: "", lastMessageAt: "",
       routeMode: "inherit", routeAgentId: null, effectiveMode: "silent", effectiveAgentId: null, routeRevision: 0,
+      triggerMode: "mention", triggerReason: "mention_metadata_unavailable",
     }, { endpoint: "PATCH /api/workspaces/:id/lweixin/installations/:installationId/conversations/:conversationId/route" });
   }
 
