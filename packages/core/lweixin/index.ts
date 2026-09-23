@@ -1,1 +1,1 @@
-export { lweixinKeys, lweixinInstallationsOptions } from "./queries";
+export { lweixinKeys, lweixinInstallationsOptions, lweixinConversationsOptions, lweixinMessagesOptions, lweixinRoutingOptions } from "./queries";

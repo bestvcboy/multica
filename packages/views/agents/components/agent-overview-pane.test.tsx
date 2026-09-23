@@ -70,6 +70,9 @@ const slackListingRef = vi.hoisted(() => ({
 const telegramListingRef = vi.hoisted(() => ({
   current: { installations: [] as unknown[], configured: false },
 }));
+const lweixinListingRef = vi.hoisted(() => ({
+  current: { installations: [] as unknown[], configured: false },
+}));
 vi.mock("@multica/core/hooks", () => ({
   useWorkspaceId: () => "ws-1",
 }));
@@ -89,6 +92,12 @@ vi.mock("@multica/core/telegram", () => ({
   telegramInstallationsOptions: () => ({
     queryKey: ["telegram", "installations"],
     queryFn: () => Promise.resolve(telegramListingRef.current),
+  }),
+}));
+vi.mock("@multica/core/lweixin", () => ({
+  lweixinInstallationsOptions: () => ({
+    queryKey: ["lweixin", "installations"],
+    queryFn: () => Promise.resolve(lweixinListingRef.current),
   }),
 }));
 
@@ -186,6 +195,7 @@ beforeEach(() => {
   larkListingRef.current = { installations: [], configured: false };
   slackListingRef.current = { installations: [], configured: false };
   telegramListingRef.current = { installations: [], configured: false };
+  lweixinListingRef.current = { installations: [], configured: false };
 });
 
 describe("AgentOverviewPane MCP tab visibility", () => {
@@ -253,6 +263,14 @@ describe("AgentOverviewPane Integrations tab visibility", () => {
     expect(
       await screen.findByRole("tab", { name: /^Integrations$/i }),
     ).toBeInTheDocument();
+  });
+
+  it("opens Integrations when only LWEIXIN is configured", async () => {
+    lweixinListingRef.current = { installations: [], configured: true };
+    renderPane([makeRuntime("claude")]);
+    openCapabilities();
+    fireEvent.click(await screen.findByRole("tab", { name: /^Integrations$/i }));
+    expect(screen.getByText("integrations-tab")).toBeInTheDocument();
   });
 
   it("hides the Integrations tab when no channel integration is configured", () => {

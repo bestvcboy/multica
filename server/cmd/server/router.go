@@ -1224,10 +1224,14 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			lwxOutbound := lweixin.NewOutbound(queries, lwxBox.Open, nil, slog.Default())
 			lwxOutbound.Register(bus)
 			h.LweixinOutbound = lwxOutbound
+			lwxHistory := lweixin.NewHistory(pool)
+			h.LweixinHistory = lwxHistory
 
 			// Per-installation inbound: the Supervisor builds + supervises one
 			// /api/messages polling loop per active Lweixin installation.
-			lweixin.RegisterLweixin(channelRegistry, lweixin.ChannelDeps{Decrypt: lwxBox.Open})
+			lweixin.RegisterLweixin(channelRegistry, lweixin.ChannelDeps{
+				Decrypt: lwxBox.Open, SilentHandler: lwxHistory.SilentHandler,
+			})
 
 			lwxInstall, lwxInstErr := lweixin.NewInstallService(queries, pool, lwxBox, slog.Default())
 			if lwxInstErr != nil {
@@ -1879,6 +1883,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
 					r.Delete("/lweixin/installations/{installationId}", h.RevokeLweixinInstallation)
 					r.Post("/lweixin/install", h.RegisterLweixinBot)
+					r.Get("/lweixin/installations/{installationId}/conversations", h.ListLweixinConversations)
+					r.Get("/lweixin/installations/{installationId}/conversations/{conversationId}/messages", h.ListLweixinMessages)
+					r.Get("/lweixin/installations/{installationId}/routing", h.GetLweixinRouting)
+					r.Patch("/lweixin/installations/{installationId}/routing", h.PatchLweixinRouting)
+					r.Patch("/lweixin/installations/{installationId}/conversations/{conversationId}/route", h.PatchLweixinConversationRoute)
 				})
 			})
 		})

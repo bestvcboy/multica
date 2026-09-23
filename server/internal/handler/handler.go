@@ -356,7 +356,6 @@ type Handler struct {
 	// enqueues EventChatDone work.
 	TelegramOutbound *telegram.Outbound
 
-
 	// LweixinInstall owns the LWEIXIN install lifecycle (register a
 	// base_url + token pair / list / revert / revoke) and the at-rest
 	// encryption of each token. Nil unless MULTICA_LWEIXIN_SECRET_KEY is set.
@@ -366,6 +365,7 @@ type Handler struct {
 	LweixinBindingTokens *lweixin.BindingTokenService
 	// LweixinOutbound posts finished agent replies to LWEIXIN on chat:done.
 	LweixinOutbound *lweixin.Outbound
+	LweixinHistory  *lweixin.History
 	// channelFileDelivery names the channel types that can, IN THIS
 	// DEPLOYMENT, carry a file the agent produced the last hop into the
 	// conversation. It answers the claim response's

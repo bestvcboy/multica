@@ -3,16 +3,176 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/integrations/lweixin"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
+
+func lweixinPage(w http.ResponseWriter, r *http.Request) (int, int, bool) {
+	limit, offset := 50, 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 100 {
+			writeError(w, http.StatusBadRequest, "limit must be between 1 and 100")
+			return 0, 0, false
+		}
+		limit = n
+	}
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 || n > 1000000 {
+			writeError(w, http.StatusBadRequest, "invalid offset")
+			return 0, 0, false
+		}
+		offset = n
+	}
+	return limit, offset, true
+}
+
+func (h *Handler) lweixinHistoryScope(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
+	if h.LweixinHistory == nil {
+		writeFeatureDisabled(w, "lweixin_not_configured", "lweixin integration not configured")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	ws, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "workspace id")
+	if !ok {
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	inst, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "installationId"), "installation id")
+	return ws, inst, ok
+}
+
+func (h *Handler) ListLweixinConversations(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	limit, offset, ok := lweixinPage(w, r)
+	if !ok {
+		return
+	}
+	rows, err := h.LweixinHistory.ListConversations(r.Context(), ws, inst, limit, offset)
+	if errors.Is(err, lweixin.ErrHistoryNotFound) {
+		writeError(w, http.StatusNotFound, "lweixin installation not found")
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list lweixin conversations")
+	} else {
+		writeJSON(w, http.StatusOK, map[string]any{"conversations": rows})
+	}
+}
+
+func (h *Handler) ListLweixinMessages(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	conv, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "conversationId"), "conversation id")
+	if !ok {
+		return
+	}
+	limit, offset, ok := lweixinPage(w, r)
+	if !ok {
+		return
+	}
+	rows, err := h.LweixinHistory.ListMessages(r.Context(), ws, inst, conv, limit, offset)
+	if errors.Is(err, lweixin.ErrHistoryNotFound) {
+		writeError(w, http.StatusNotFound, "lweixin conversation not found")
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list lweixin messages")
+	} else {
+		writeJSON(w, http.StatusOK, map[string]any{"messages": rows})
+	}
+}
+
+func lweixinRouteError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, lweixin.ErrHistoryNotFound):
+		writeError(w, http.StatusNotFound, "lweixin installation or conversation not found")
+	case errors.Is(err, lweixin.ErrRoutingLegacy), errors.Is(err, lweixin.ErrRouteAgentUnavailable):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, lweixin.ErrRouteInvalid):
+		writeError(w, http.StatusBadRequest, "invalid lweixin route")
+	default:
+		writeError(w, http.StatusInternalServerError, "failed to update lweixin route")
+	}
+}
+
+func (h *Handler) GetLweixinRouting(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	policy, err := h.LweixinHistory.GetRouting(r.Context(), ws, inst)
+	if err != nil {
+		lweixinRouteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, policy)
+}
+
+func (h *Handler) PatchLweixinRouting(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		PrivateDefault *lweixin.RouteChoice `json:"private_default"`
+		GroupDefault   *lweixin.RouteChoice `json:"group_default"`
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid routing policy")
+		return
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid routing policy")
+		return
+	}
+	policy, err := h.LweixinHistory.PatchRouting(r.Context(), ws, inst, body.PrivateDefault, body.GroupDefault)
+	if err != nil {
+		lweixinRouteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, policy)
+}
+
+func (h *Handler) PatchLweixinConversationRoute(w http.ResponseWriter, r *http.Request) {
+	ws, inst, ok := h.lweixinHistoryScope(w, r)
+	if !ok {
+		return
+	}
+	conv, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "conversationId"), "conversation id")
+	if !ok {
+		return
+	}
+	var choice lweixin.RouteChoice
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&choice); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation route")
+		return
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid conversation route")
+		return
+	}
+	result, err := h.LweixinHistory.PatchConversationRoute(r.Context(), ws, inst, conv, choice)
+	if err != nil {
+		lweixinRouteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
 
 // LweixinInstallationResponse is the wire shape for a LWEIXIN installation
 // row. The encrypted API token in config is INTENTIONALLY absent: server-internal.

@@ -44,3 +44,48 @@ export interface RedeemLweixinBindingTokenResponse {
   installation_id: string;
   lweixin_user_id: string;
 }
+
+export interface LweixinConversation {
+  id: string;
+  accountId: string;
+  chatType: string;
+  chatId: string;
+  lastMessageAt: string;
+  routeMode: LweixinRouteMode;
+  routeAgentId: string | null;
+  effectiveMode: LweixinDefaultMode;
+  effectiveAgentId: string | null;
+  routeRevision: number;
+  triggerMode: LweixinGroupTriggerMode;
+  triggerReason: LweixinGroupTriggerReason;
+}
+
+export type LweixinDefaultMode = "silent" | "agent";
+export type LweixinRouteMode = "inherit" | LweixinDefaultMode;
+export type LweixinGroupTriggerMode = "mention" | "all";
+export type LweixinGroupTriggerReason = "mention_metadata_unavailable" | "execution_isolation_unavailable" | null;
+export interface LweixinRoutePolicy {
+  mode: LweixinDefaultMode;
+  agentId: string | null;
+}
+export interface LweixinRouting {
+  privateDefault: LweixinRoutePolicy;
+  groupDefault: LweixinRoutePolicy;
+  privateRevision: number;
+  groupRevision: number;
+}
+
+export interface LweixinTextMessage {
+  messageId: string;
+  senderId: string;
+  text: string;
+  receivedAt: string;
+}
+
+export interface ListLweixinConversationsResponse {
+  conversations: LweixinConversation[];
+}
+
+export interface ListLweixinMessagesResponse {
+  messages: LweixinTextMessage[];
+}

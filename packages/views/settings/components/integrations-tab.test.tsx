@@ -91,6 +91,12 @@ describe("Integration directory", () => {
     renderWithI18n(<IntegrationsTab />);
     expect(screen.getByText("LWeixin detail")).toBeInTheDocument();
   });
+  it("links to LWEIXIN with the active-installation status", () => {
+    renderWithI18n(<IntegrationsTab />);
+    expect(
+      screen.getByRole("link", { name: /LWEIXIN Connected/i }),
+    ).toHaveAttribute("href", "/acme/settings?tab=integrations&integration=lweixin");
+  });
   it("shows live connection summaries without mounting configuration forms", () => {
     renderWithI18n(<IntegrationsTab />);
     expect(
@@ -179,9 +185,9 @@ describe("Integration directory", () => {
     expect(
       screen.getByRole("link", { name: /GitHub Connected/ }),
     ).toBeInTheDocument();
-    for (const channel of ["Lark", "Slack", "DingTalk", "WeCom", "Telegram"]) {
+    for (const channel of ["Lark", "Slack", "DingTalk", "WeCom", "Telegram", "LWEIXIN"]) {
       expect(
-        screen.getByRole("link", { name: new RegExp(`${channel} Not connected`) }),
+        screen.getByRole("link", { name: new RegExp(`${channel} Not connected`, "i") }),
       ).toBeInTheDocument();
     }
   });

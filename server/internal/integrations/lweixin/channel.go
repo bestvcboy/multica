@@ -2,12 +2,14 @@ package lweixin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/integrations/channel"
 )
 
@@ -42,7 +44,7 @@ const pollLimit = 200
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
-	select{
+	select {
 	case <-ctx.Done():
 		return false
 	case <-timer.C:
@@ -125,6 +127,8 @@ func (c *lweixinChannel) Connect(ctx context.Context) error {
 type ChannelDeps struct {
 	Decrypt Decrypter
 	Logger  *slog.Logger
+	// SilentHandler handles new installations without entering the member-bound router.
+	SilentHandler func(installationID pgtype.UUID) channel.InboundHandler
 	// HTTPClient overrides the polling client (tests). Nil uses a default.
 	HTTPClient *http.Client
 }
@@ -146,10 +150,21 @@ func newLweixinFactory(deps ChannelDeps) channel.Factory {
 		if err != nil {
 			return nil, fmt.Errorf("lweixin: load credentials: %w", err)
 		}
+		var saved installConfig
+		if err := json.Unmarshal(cfg.Raw, &saved); err != nil {
+			return nil, err
+		}
+		handler := cfg.Handler
+		if saved.SilentReceive {
+			if deps.SilentHandler == nil || !cfg.ID.Valid {
+				return nil, errors.New("lweixin: silent handler not configured")
+			}
+			handler = deps.SilentHandler(cfg.ID)
+		}
 		return &lweixinChannel{
-			api:     newAPI(creds.BaseURL, creds.APIToken, deps.HTTPClient),
-			handler: cfg.Handler,
-			logger:  logger,
+			api:      newAPI(creds.BaseURL, creds.APIToken, deps.HTTPClient),
+			handler:  handler,
+			logger:   logger,
 			selfWxid: creds.AppID,
 		}, nil
 	}
