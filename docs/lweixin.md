@@ -6,6 +6,7 @@ Multica 后端会访问该地址下的 `/api/status`，获取微信号 wxid；�
 
 一个工作区可连接多个微信号。同一个微信号不能同时连接到不同工作区；需要先断开原连接。
 新连接初始静默：收到的文字消息按微信号、朋友或群保存，管理员可在设置中查看历史，分别配置私聊与群聊默认规则以及具体会话的覆盖规则。当前版本尚未启用隔离执行，即使选择了智能体也不会自动回复；静默期间不发送绑定提示，也不会在启用接待后补回复旧消息。
+群聊默认仅在可靠识别到 @入口账号时触发，但当前网关没有可核验的提及目标字段，因此此模式只记录并显示原因。管理员也可为指定群保存“每条文字消息”规则；执行隔离启用前仍不会运行。
 升级前已有的连接暂时保留原有单智能体和发信人绑定流程。不要把新连接的规则视为旧连接已完成迁移。
 
 连接列表和断开操作位于设置 → 集成 → 微信（LWEIXIN）；只有工作区 owner/admin 可以管理连接。
@@ -27,7 +28,7 @@ LWEIXIN 消息轮询由 ECS 上的 Multica 后端运行；接待执行尚未启�
 | --- | --- |
 | `server/cmd/server/router.go`、`server/internal/handler/handler.go` | 密钥配置、channel resolver/factory、出站订阅、成员可读与管理员可写的安装路由、登录后绑定路由仍接线。 |
 | `server/internal/integrations/lweixin/history.go`、`routing.go`、`server/internal/handler/lweixin.go` | 新连接按入口与会话去重记录文字；路由管理与历史读取仍要求 owner/admin，旧连接继续使用原处理器。 |
-| `server/migrations/536`–`542`、`server/cmd/migrate/main.go` | 会话、文字和路由表及独立并发索引的中断恢复映射仍匹配；新增迁移编号不与上游冲突。 |
+| `server/migrations/536`–`542`、`547`、`server/cmd/migrate/main.go` | 会话、文字、路由表和群触发字段及独立并发索引的中断恢复映射仍匹配；新增迁移编号不与上游冲突。 |
 | `server/pkg/protocol/events.go`、`packages/core/realtime/use-realtime-sync.ts` | 创建和撤销事件仍使工作区安装列表失效。 |
 | `server/migrations/535_issue_origin_lweixin_chat.up.sql` | 上游迁移编号和 `issue.origin_type` 约束不冲突。 |
 | `packages/core/api/client.ts`、`packages/core/api/schemas.ts`、`packages/core/types/lweixin.ts` | 列表、连接、断开、绑定仍按兼容 schema 解析；安装状态及可用标记保留。 |
